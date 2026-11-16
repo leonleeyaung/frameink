@@ -68,6 +68,9 @@
   .mk .f{color:var(--accent);font-variant-numeric:tabular-nums;min-width:46px}
   .mk .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .mk .d{color:var(--dim);font-size:11.5px}
+  .mk > .mdel{color:#5d6674;font-size:13px;line-height:1;padding:2px 6px;border-radius:5px;flex:none;opacity:0;transition:opacity .12s}
+  .mk:hover > .mdel{opacity:1}
+  .mk > .mdel:hover{color:#ff5b6e;background:#3a2b2f}
   #detail{border-top:1px solid var(--line);padding:8px 10px;font-size:12.5px;color:var(--dim);display:none}
   #detail.show{display:block}
   #detail .row{display:flex;align-items:center;gap:6px;margin:5px 0}
@@ -607,7 +610,14 @@
       d.innerHTML = '<span class="chip" style="background:' + (t ? t.color : '#666') + '"></span>' +
         '<span class="f">' + it.start + '</span>' +
         '<span class="nm">' + escapeHtml(itemLabel(it)) + '</span>' +
-        '<span class="d">' + (dur > 1 ? dur + '帧' : '') + '</span>';
+        '<span class="d">' + (dur > 1 ? dur + '帧' : '') + '</span>' +
+        '<span class="mdel" title="删除这条注释">×</span>';
+      d.querySelector('.mdel').onclick = (ev) => {
+        ev.stopPropagation();
+        S.items = S.items.filter(x => x !== it);
+        if (S.sel === it) { S.sel = null; showDetail(); }
+        renderFrame(); renderMarks(); drawTimeline(); autosave();
+      };
       d.onclick = () => { S.sel = it; seekFrame(it.start); showDetail(); renderMarks(); };
       box.appendChild(d);
     });

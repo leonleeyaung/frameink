@@ -4,10 +4,18 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
-const FFMPEG = process.env.LAPIAN_FFMPEG ||
-  (fs.existsSync('C:\\Users\\leonl\\Documents\\deepseek-harness\\default-workspace\\tools\\ffmpeg.exe')
-    ? 'C:\\Users\\leonl\\Documents\\deepseek-harness\\default-workspace\\tools\\ffmpeg.exe'
-    : 'ffmpeg');
+// 找 ffmpeg：环境变量 → 程序旁边 → resources → 开发机路径 → PATH
+function findFfmpeg() {
+  const cands = [];
+  if (process.env.LAPIAN_FFMPEG) cands.push(process.env.LAPIAN_FFMPEG);
+  try { cands.push(path.join(path.dirname(process.execPath), 'ffmpeg.exe')); } catch (e) {}
+  try { if (process.resourcesPath) cands.push(path.join(process.resourcesPath, 'ffmpeg.exe')); } catch (e) {}
+  cands.push(path.join(__dirname, 'ffmpeg.exe'));
+  cands.push('C:\\Users\\leonl\\Documents\\deepseek-harness\\default-workspace\\tools\\ffmpeg.exe');
+  for (const c of cands) { try { if (c && fs.existsSync(c)) return c; } catch (e) {} }
+  return 'ffmpeg';
+}
+const FFMPEG = findFfmpeg();
 
 const VIDEO_EXT = ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.avi', '.flv', '.ts'];
 let win = null;

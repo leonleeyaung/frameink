@@ -1,14 +1,10 @@
 {
   "name": "frameink",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Frame-accurate video annotation for animation study — draw and write on any frame, then export the clip.",
   "main": "main.js",
-  "scripts": {
-    "start": "electron ."
-  },
+  "scripts": { "start": "electron ." },
   "keywords": ["video", "annotation", "storyboard", "frame-accurate", "electron", "sakuga"],
   "license": "MIT",
-  "devDependencies": {
-    "electron": "^45.3.2"
-  }
+  "devDependencies": { "electron": "^45.3.2" }
 }

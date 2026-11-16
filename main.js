@@ -135,23 +135,126 @@ function writeProjects(d) {
   try { fs.mkdirSync(path.dirname(PROJ_FILE), { recursive: true }); fs.writeFileSync(PROJ_FILE, JSON.stringify(d, null, 2), 'utf8'); } catch (e) {}
 }
 
-ipcMain.handle('projects-list', () => readProjects().list || []);
+// 老工程（记录里没有 file 字段）自动补一个工程文件，别让它显示不出路径
+function healProjects() {
+  const d = readProjects();
+  d.list = d.list || [];
+  let changed = false;
+  d.list.forEach(item => {
+    if (item.file) return;
+    const name = item.name || '未命名';
+    const target = item.file || defaultProjectFile(name);
+    if (!target) return;
+    try {
+      if (!fs.existsSync(target)) {
+        const proj = {
+          id: item.id || ('p' + Date.now()),
+          name,
+          file: target,
+          videos: Array.isArray(item.videos) ? item.videos : [],
+          currentPath: item.currentPath || '',
+          count: Array.isArray(item.videos) ? item.videos.length : (item.count || 0),
+          createdAt: item.createdAt || Date.now(),
+          updatedAt: Date.now()
+        };
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, JSON.stringify(proj, null, 2), 'utf8');
+      }
+      item.file = target;
+      item.count = item.count || 0;
+      changed = true;
+    } catch (e) { logSave('heal failed: ' + e.message); }
+  });
+  if (changed) writeProjects(d);
+  return d.list;
+}
+
+ipcMain.handle('projects-list', () => healProjects());
 
 const SAVE_LOG = () => path.join(app.getPath('userData'), 'save.log');
 function logSave(msg) {
   try { fs.appendFileSync(SAVE_LOG(), new Date().toISOString() + ' ' + msg + '\n'); } catch (err) {}
 }
 
-ipcMain.handle('project-save', (e, proj) => {
-  const d = readProjects();
-  d.list = d.list || [];
-  const i = d.list.findIndex(x => x.id === proj.id);
-  proj.updatedAt = Date.now();
-  if (i >= 0) d.list[i] = proj; else d.list.unshift(proj);
-  d.list = d.list.slice(0, 40);
-  writeProjects(d);
-  logSave('saved ' + (proj && proj.name) + ' videos=' + ((proj && proj.videos) ? proj.videos.length : 0));
-  return true;
+function defaultProjectFile(name) {
+  const dir = path.join(app.getPath('documents'), 'FrameInk');
+  const safe = String(name || 'project').replace(/[\\/:*?"<>|]/g, '_');
+  return path.join(dir, safe + '.frameink.json');
+}
+
+ipcMain.handle('pick-dir', async (e, title) => {
+  const r = await dialog.showOpenDialog(win, {
+    title: title || '选择文件夹',
+    properties: ['openDirectory', 'createDirectory']
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+
+ipcMain.handle('default-project-dir', () => path.join(app.getPath('documents'), 'FrameInk'));
+
+ipcMain.handle('project-pick-file', async (e, defaultName) => {
+  const r = await dialog.showSaveDialog(win, {
+    title: '工程保存在哪',
+    defaultPath: defaultProjectFile(defaultName),
+    filters: [{ name: 'FrameInk 工程', extensions: ['json'] }]
+  });
+  return r.canceled ? null : r.filePath;
+});
+
+ipcMain.handle('project-open-file', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: '打开工程',
+    properties: ['openFile'],
+    filters: [{ name: 'FrameInk 工程', extensions: ['json'] }]
+  });
+  if (r.canceled) return null;
+  try {
+    const p = r.filePaths[0];
+    const proj = JSON.parse(fs.readFileSync(p, 'utf8'));
+    proj.file = p;
+    // 记进索引
+    const d = readProjects();
+    d.list = d.list || [];
+    const i = d.list.findIndex(x => x.file === p || x.id === proj.id);
+    const meta = { id: proj.id || ('p' + Date.now()), name: proj.name || path.basename(p, '.frameink.json'), file: p, count: (proj.videos || []).length, currentPath: proj.currentPath || '', updatedAt: Date.now() };
+    if (i >= 0) d.list[i] = meta; else d.list.unshift(meta);
+    d.list = d.list.slice(0, 40);
+    writeProjects(d);
+    return proj;
+  } catch (err) { return { error: err.message }; }
+});
+
+ipcMain.handle('project-save', (e, proj, filePath) => {
+  try {
+    const target = filePath || proj.file || defaultProjectFile(proj.name);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    proj.file = target;
+    proj.updatedAt = Date.now();
+    fs.writeFileSync(target, JSON.stringify(proj, null, 2), 'utf8');
+
+    const d = readProjects();
+    d.list = d.list || [];
+    const meta = {
+      id: proj.id, name: proj.name, file: target,
+      count: (proj.videos || []).length,
+      currentPath: proj.currentPath || '',
+      updatedAt: Date.now()
+    };
+    const i = d.list.findIndex(x => x.id === proj.id || x.file === target);
+    if (i >= 0) d.list[i] = meta; else d.list.unshift(meta);
+    d.list = d.list.slice(0, 40);
+    writeProjects(d);
+    logSave('saved ' + proj.name + ' videos=' + meta.count + ' -> ' + target);
+    return { ok: true, file: target };
+  } catch (err) {
+    logSave('save failed: ' + err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('project-read', (e, filePath) => {
+  try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); }
+  catch (err) { return null; }
 });
 
 ipcMain.handle('project-remove', (e, id) => {
@@ -224,6 +327,26 @@ ipcMain.handle('stat-path', (e, p) => {
     const st = fs.statSync(p);
     return { exists: true, isDir: st.isDirectory(), size: st.size };
   } catch (err) { return { exists: false, isDir: false }; }
+});
+
+ipcMain.handle('rename-video', (e, oldPath, newName) => {
+  try {
+    if (!oldPath || !fs.existsSync(oldPath)) return { ok: false, error: '文件不存在' };
+    const dir = path.dirname(oldPath);
+    const ext = path.extname(oldPath);
+    let base = String(newName || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+    if (!base) return { ok: false, error: '名字不能为空' };
+    if (!path.extname(base)) base += ext;
+    const target = path.join(dir, base);
+    if (target.toLowerCase() === oldPath.toLowerCase()) {
+      return { ok: true, path: oldPath, name: path.basename(oldPath) };
+    }
+    if (fs.existsSync(target)) return { ok: false, error: '这个文件名已经存在' };
+    fs.renameSync(oldPath, target);
+    const oldNote = notePathOf(oldPath), newNote = notePathOf(target);
+    if (fs.existsSync(oldNote)) { try { fs.renameSync(oldNote, newNote); } catch (e2) {} }
+    return { ok: true, path: target, name: path.basename(target), hasNote: fs.existsSync(newNote) };
+  } catch (err) { return { ok: false, error: err.message }; }
 });
 
 ipcMain.handle('notes-load', async (e, videoPath) => {

@@ -30,6 +30,9 @@
   .vi.on{background:#2f3a4a;box-shadow:inset 0 0 0 1px #3d5b7f}
   .vi .sub{display:block;font-size:11px;color:var(--dim)}
   .vi{display:flex;align-items:center;gap:6px}
+  .vi > .vren{color:#5d6674;font-size:12px;line-height:1;padding:2px 6px;border-radius:5px;flex:none;opacity:0;transition:opacity .12s}
+  .vi:hover > .vren{opacity:1}
+  .vi > .vren:hover{color:#7fc7ff;background:#2b3a4b}
   .vi > .vdel{color:#5d6674;font-size:13px;line-height:1;padding:2px 6px;border-radius:5px;flex:none;opacity:0;transition:opacity .12s,color .12s}
   .vi:hover > .vdel{opacity:1}
   .vi > .vdel:hover{color:#ff5b6e;background:#3a2b2f}
@@ -99,6 +102,7 @@
   .su-item .nm{font-size:14.5px}
   .su-item .path{font-size:11.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px}
   .su-item .meta{font-size:11.5px;color:var(--dim);text-align:right}
+  .su-item .ren:hover{background:#33404f;color:#e6e9ef}
   .su-item .del{color:#7a6168;padding:2px 8px;border-radius:6px}
   .su-item .del:hover{color:var(--danger);background:#3a2b2f}
   .su-empty{padding:26px;text-align:center;color:var(--dim);font-size:13px}
@@ -112,9 +116,10 @@
     <div class="su-sub">选一个工程继续，或者新建一个</div>
     <div class="su-actions">
       <button class="su-btn primary" id="su-new">＋ 新建工程</button>
-      <button class="su-btn" id="su-file">只导入一个视频</button>
-      <button class="su-btn" id="su-quit">退出</button>
+      <button class="su-btn" id="su-openfile">打开工程文件…</button>
     </div>
+    <input id="su-search" type="text" placeholder="搜工程名或路径…"
+      style="width:100%;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:#242b35;color:var(--fg);font-size:13.5px">
     <div class="su-list" id="su-list"></div>
   </div>
 </div>
@@ -157,6 +162,8 @@
 
   <div id="main">
     <div id="vlist">
+      <div style="padding:6px 8px 4px"><input id="vidsearch" type="text" placeholder="搜视频名…"
+        style="width:100%;padding:5px 8px;border-radius:7px;border:1px solid var(--line);background:#2f3642;color:var(--fg);font-size:12.5px"></div>
       <h4>视频 <span id="vidcount" style="color:var(--accent);font-weight:400"></span>
         <span style="flex:1"></span>
         <span class="hbtn" id="clearvideos" title="把列表里的视频都清掉（不删文件）">清空</span>
@@ -1229,23 +1236,64 @@
   function renderVideos() {
     const box = $('videos');
     if (!S.videos.length) {
-      box.innerHTML = '<div id="vempty">还没导入文件夹<br>点上面「导入文件夹」</div>';
+      box.innerHTML = '<div id="vempty">把视频或文件夹拖进来<br>也可以用上面的按钮导入</div>';
+      return;
+    }
+    const q = ($('vidsearch') ? $('vidsearch').value : '').trim().toLowerCase();
+    const shown = [];
+    S.videos.forEach((v, i) => {
+      if (q) {
+        const hay = (((v.rel || v.name) || '') + ' ' + (v.path || '')).toLowerCase();
+        if (!hay.includes(q)) return;
+      }
+      shown.push(i);
+    });
+    if (!shown.length) {
+      box.innerHTML = '<div id="vempty">没有匹配的视频</div>';
       return;
     }
     box.innerHTML = '';
-    S.videos.forEach((v, i) => {
+    shown.forEach((i) => {
+      const v = S.videos[i];
       const d = document.createElement('div');
       d.className = 'vi' + (i === S.videoIndex ? ' on' : '');
-      d.title = v.name;
+      d.title = v.path || v.name;
       const kb = v.size ? ' · ' + Math.round(v.size / 1048576) + ' MB' : '';
       const label = (v.rel && v.rel !== v.name) ? v.rel : v.name;
       d.innerHTML = '<div style="flex:1;overflow:hidden"><span title="' + escapeHtml(v.path || label) + '">' + escapeHtml(label) + '</span>'
         + '<span class="sub">' + (v.hasNote ? '有注释' : '无注释') + kb + '</span></div>'
+        + '<span class="vren" title="重命名视频（注释文件会一起改）">改</span>'
         + '<span class="vdel" title="从列表移除（不删文件）">×</span>';
       d.querySelector('.vdel').onclick = (ev) => { ev.stopPropagation(); removeVideo(i); };
+      const vren = d.querySelector('.vren');
+      if (vren) vren.onclick = (ev) => { ev.stopPropagation(); renameVideo(i); };
       d.onclick = () => openFromList(i);
       box.appendChild(d);
     });
+    const vc = $('vidcount');
+    if (vc) vc.textContent = S.videos.length ? '(' + S.videos.length + ')' : '';
+  }
+
+  // 重命名视频文件（注释文件跟着改）
+  async function renameVideo(i) {
+    const v = S.videos[i];
+    if (!v || !v.path) { say('这个视频没有真实路径，改不了名'); return; }
+    const cur = v.name.replace(/\.[^.]+$/, '');
+    const name = await askText('重命名视频', cur);
+    if (name === null || !name.trim() || name.trim() === cur) return;
+    const wasCurrent = (S.videoIndex === i);
+    const backupTime = wasCurrent ? v.currentTime : 0;
+    const r = await window.lapian.renameVideo(v.path, name.trim());
+    if (!r || !r.ok) { alert('改名失败：' + ((r && r.error) || '未知原因') + '\n（视频正在播放时可能被占用，先切到别的视频再试）'); return; }
+    v.path = r.path;
+    v.name = r.name;
+    v.rel = r.name;
+    v.hasNote = !!r.hasNote;
+    if (wasCurrent) S.curPath = r.path;
+    renderVideos();
+    if (DESK && S.proj) saveProjectNow();
+    if (wasCurrent) loadVideoPath(v);
+    say('已改名：' + r.name);
   }
 
   // 从列表移除一个视频
@@ -1406,6 +1454,11 @@
 
 
   $('clearvideos').onclick = () => clearVideos();
+  $('vidsearch').oninput = () => renderVideos();
+  $('vidsearch').onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { $('vidsearch').value = ''; renderVideos(); }
+  };
   $('onion').onclick = () => {
     S.onion = !S.onion;
     $('onion').classList.toggle('on', S.onion);
@@ -1710,25 +1763,91 @@
     });
   }
 
-  async function newProject() {
+  // 新建工程：一个框里填名字、选位置（跟 Premiere 那样）
+  async function showNewProjectDialog() {
     const d = new Date();
-    const def = '新工程 ' + (d.getMonth() + 1) + '-' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
-    const name = await askText('新建工程', def);
-    if (name === null) return;
+    const defName = '新工程 ' + (d.getMonth() + 1) + '-' + d.getDate() + ' '
+      + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+    let dir = '';
+    try { dir = (await window.lapian.defaultProjectDir()) || ''; } catch (e) {}
+
+    return new Promise((resolve) => {
+      const box = document.createElement('div');
+      box.style.cssText = 'position:fixed;inset:0;background:#000a;z-index:400;display:flex;align-items:center;justify-content:center';
+      const card = document.createElement('div');
+      card.style.cssText = 'background:#252a33;border:1px solid #343b47;border-radius:12px;width:520px;padding:18px 20px;color:#e6e9ef';
+      card.innerHTML = [
+        '<div style="font-size:16px;font-weight:600;margin-bottom:16px">新建工程</div>',
+        '<div style="font-size:12.5px;color:#8b93a1;margin-bottom:6px">工程名</div>',
+        '<input id="np-name" type="text" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #343b47;background:#2f3642;color:#e6e9ef;font-size:14px;margin-bottom:14px">',
+        '<div style="font-size:12.5px;color:#8b93a1;margin-bottom:6px">位置</div>',
+        '<div style="display:flex;gap:8px;margin-bottom:18px">',
+        '  <input id="np-dir" type="text" readonly style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid #343b47;background:#2f3642;color:#c9d2e0;font-size:13px">',
+        '  <button id="np-browse" style="padding:8px 14px">浏览…</button>',
+        '</div>',
+        '<div style="display:flex;gap:8px;justify-content:flex-end">',
+        '  <button id="np-cancel" style="padding:7px 16px">取消</button>',
+        '  <button id="np-ok" style="padding:7px 18px;background:#4ea1ff;border-color:#4ea1ff;color:#06121f;font-weight:600">创建</button>',
+        '</div>'
+      ].join('');
+
+      box.appendChild(card);
+      document.body.appendChild(box);
+
+      const inpN = card.querySelector('#np-name');
+      const inpD = card.querySelector('#np-dir');
+      inpN.value = defName;
+      inpD.value = dir;
+
+      card.querySelector('#np-browse').onclick = async () => {
+        const picked = await window.lapian.pickDir('工程保存在哪');
+        if (picked) inpD.value = picked;
+      };
+
+      const close = (val) => { document.body.removeChild(box); resolve(val); };
+      card.querySelector('#np-cancel').onclick = () => close(null);
+      card.querySelector('#np-ok').onclick = () => {
+        const name = (inpN.value || '').trim();
+        const where = (inpD.value || '').trim();
+        if (!name) { alert('给工程起个名字'); return; }
+        if (!where) { alert('选一个保存位置'); return; }
+        close({ name, dir: where });
+      };
+      inpN.onkeydown = (e) => { if (e.key === 'Enter') card.querySelector('#np-ok').click(); };
+      setTimeout(() => { inpN.focus(); inpN.select(); }, 30);
+    });
+  }
+
+  async function newProject() {
+    if (!DESK) {                       // 浏览器版没有选目录能力，退化
+      const d = new Date();
+      const name = await askText('新建工程', '新工程');
+      if (name === null) return;
+      S.proj = { id: 'p' + Date.now(), name, videos: [], currentPath: '', count: 0, createdAt: Date.now() };
+      S.videos = []; S.videoIndex = -1;
+      renderVideos(); renderProjName();
+      return;
+    }
+
+    const r = await showNewProjectDialog();
+    if (!r) return;
+
+    const file = r.dir.replace(/[\\/]+$/, '') + '\\' + r.name.replace(/[\\/:*?"<>|]/g, '_') + '.frameink.json';
     const proj = {
       id: 'p' + Date.now(),
-      name: name || def,
+      name: r.name,
+      file,
       videos: [],
       currentPath: '',
       count: 0,
       createdAt: Date.now()
     };
-    await window.lapian.projectSave(proj);
+    const res = await window.lapian.projectSave(proj, file);
+    if (res && res.ok) proj.file = res.file;
     S.proj = proj;
     S.videos = []; S.videoIndex = -1;
-    await saveProjectNow();
     renderVideos(); updateSaveHint(); renderProjName();
-    say('已新建工程：' + proj.name + '，拖视频或文件夹进来');
+    say('工程：' + proj.file);
   }
 
   async function openProject(proj) {
@@ -1749,6 +1868,27 @@
     if (files.length) openFromList(idx);
     else say('这个工程里还没有视频，拖进来就行');
     await saveProjectNow();
+  }
+
+  // 改工程名（同名工程文件不动，只改里面记的名字）
+  async function renameProject(meta) {
+    if (!meta) return;
+    const name = await askText('工程名', meta.name || '');
+    if (name === null || !name.trim()) return;
+    let proj = meta;
+    if (meta.file && window.lapian.projectRead) {
+      const onDisk = await window.lapian.projectRead(meta.file);
+      if (onDisk) proj = onDisk;
+    }
+    proj.name = name.trim();
+    if (meta.file) proj.file = meta.file;
+    const r = await window.lapian.projectSave(proj, proj.file);
+    if (S.proj && (S.proj.id === proj.id || S.proj.file === proj.file)) {
+      S.proj.name = proj.name;
+      renderProjName();
+    }
+    showStartup();
+    say('已改名为：' + proj.name);
   }
 
   async function showProjects() {
@@ -1803,23 +1943,43 @@
     if (!list.length) {
       box.innerHTML = '<div class="su-empty">还没有工程。<br>直接拖一个视频文件夹到这个窗口，会自动建工程。<br>或者点「＋ 新建工程」。</div>';
     } else {
+      const q = ($('su-search') ? $('su-search').value : '').trim().toLowerCase();
+      const shown = list.map((p, i) => ({ p, i })).filter(({ p }) => {
+        if (!q) return true;
+        return ((p.name || '') + ' ' + (p.file || p.dir || '')).toLowerCase().includes(q);
+      });
+      if (!shown.length) {
+        box.innerHTML = '<div class="su-empty">没有匹配的工程</div>';
+        return;
+      }
       box.innerHTML = '';
-      list.forEach((p, i) => {
+      shown.forEach(({ p, i }) => {
         const d = document.createElement('div');
         d.className = 'su-item';
         d.innerHTML = '<div style="flex:1;overflow:hidden">'
           + '<div class="nm">' + escapeHtml(p.name || '未命名') + '</div>'
-          + '<div class="path">' + escapeHtml(p.dir || '') + '</div></div>'
+          + '<div class="path">' + escapeHtml(p.file || p.dir || '（旧工程，没有记录文件位置）') + '</div></div>'
           + '<div class="meta">' + (p.count || 0) + ' 个视频</div>'
+          + '<div class="ren" title="改工程名" style="color:#8b93a1;padding:2px 8px;border-radius:6px">改名</div>'
           + '<div class="del" title="删除这个工程">✕</div>';
         d.querySelector('.del').onclick = async (ev) => {
           ev.stopPropagation();
           await window.lapian.projectRemove(list[i].id);
           showStartup();
         };
+        d.querySelector('.ren').onclick = async (ev) => {
+          ev.stopPropagation();
+          await renameProject(list[i]);
+        };
         d.onclick = async () => {
           el.classList.add('hide');
-          await openProject(list[i]);
+          const meta = list[i];
+          let proj = meta;
+          if (meta.file && window.lapian.projectRead) {
+            const onDisk = await window.lapian.projectRead(meta.file);
+            if (onDisk) proj = onDisk;
+          }
+          await openProject(proj);
         };
         box.appendChild(d);
       });
@@ -1830,22 +1990,26 @@
     await newProject();
     if (S.proj) $('startup').classList.add('hide');
   };
-  $('su-file').onclick = async () => {
+
+  const suSearch = $('su-search');
+  if (suSearch) {
+    suSearch.oninput = () => showStartup();
+    suSearch.onkeydown = (e) => {
+      if (e.key === 'Escape') { suSearch.value = ''; showStartup(); }
+      e.stopPropagation();
+    };
+  }
+
+  $('su-openfile').onclick = async () => {
+    const proj = await window.lapian.projectOpenFile();
+    if (!proj) return;
+    if (proj.error) { alert('打不开这个工程：' + proj.error); return; }
     $('startup').classList.add('hide');
-    const items = await window.lapian.pickFiles();
-    if (!items || !items.length) { showStartup(); return; }
-    items.forEach(it => {
-      const i = S.videos.findIndex(x => x.name === it.name);
-      if (i >= 0) S.videos[i] = it; else S.videos.push(it);
-    });
-    S.videos.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
-    renderVideos();
-    S.videoIndex = S.videos.findIndex(x => x.path === items[0].path);
-    openFromList(S.videoIndex);
+    await openProject(proj);
   };
-  $('su-quit').onclick = () => window.close();
 
   $('projbtn').onclick = () => showStartup();
+  $('projbtn').ondblclick = (e) => { e.stopPropagation(); if (S.proj) renameProject(S.proj); };
 
   // 工程保存：列表/当前视频一变就立刻落盘（不等定时器，避免关掉就丢）
   async function saveProjectNow() {
@@ -1854,7 +2018,8 @@
     S.proj.count = S.videos.length;
     S.proj.currentPath = S.curPath || S.proj.currentPath || '';
     try {
-      await window.lapian.projectSave(S.proj);
+      const r = await window.lapian.projectSave(S.proj, S.proj.file);
+      if (r && r.file) S.proj.file = r.file;
       $('savehint').textContent = '工程已保存 · ' + new Date().toLocaleTimeString();
     } catch (e) {
       say('工程保存失败：' + e.message);

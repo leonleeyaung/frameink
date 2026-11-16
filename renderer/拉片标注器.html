@@ -57,6 +57,8 @@
   .trk .nm{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .trk .nm input{width:100%;padding:0 4px;font-size:12.5px}
   .trk .op{font-size:11px;color:var(--dim);padding:0 3px;border-radius:4px;flex:none}
+  .trk .op.onion{cursor:pointer}
+  .trk .op.onion.on{background:var(--accent);color:#06121f;font-weight:600}
   .trk .op:hover{background:#3a4352;color:var(--fg)}
   .trk .op.off{color:#5b6270;text-decoration:line-through}
   .trk .del{color:#7a6168}
@@ -77,7 +79,10 @@
   #detail input[type=number]{width:62px;padding:2px 6px}
   #detail input[type=text]{flex:1;padding:2px 6px}
   #bar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--panel);border-top:1px solid var(--line);flex-wrap:wrap}
-  #seek{flex:1;min-width:150px}
+  #seek{flex:1 1 auto;min-width:320px}
+  #bar{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+  #bar .tag{flex:none}
+  #rangeshow{flex:0 0 auto;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #timeline{height:30px;background:var(--panel);border-top:1px solid var(--line);position:relative;cursor:pointer}
   #timeline canvas{position:absolute;inset:0;width:100%;height:100%}
   .tag{font-size:12px;color:var(--dim)}
@@ -130,13 +135,13 @@
 <div id="app">
   <div id="top">
     <button id="projbtn" title="新建 / 打开 / 最近工程">工程</button>
-    <button id="delproj" title="从列表里删除当前工程">删除工程</button>
     <button id="open">导入视频</button>
     <button id="importdir" title="选一个文件夹，把里面的视频都列出来">导入文件夹</button>
     <input id="file" type="file" accept="video/*" hidden>
 
     <span class="tag">工具</span>
-    <button data-tool="pen" class="on">画笔</button>
+    <button data-tool="select" class="on" title="选择 / 拖动（V）">选择</button>
+    <button data-tool="pen">画笔</button>
     <button data-tool="text">文字</button>
     <button data-tool="line">箭头</button>
     <button data-tool="rect">方框</button>
@@ -153,7 +158,7 @@
     <button id="undo" class="icon" title="撤销（Ctrl+Z）">↶</button>
     <button id="redo" class="icon" title="前进（Ctrl+Shift+Z / Ctrl+Y）">↷</button>
     <button id="bind" title="选一次视频所在文件夹，注释自动存在旁边">绑定文件夹</button>
-    <button id="save">保存</button>
+    <button id="save" title="把注释另存一份到别处（默认已经自动存到视频旁边）">另存为注释</button>
     <button id="export" title="下载注释文件（换个地方放着）">另存为…</button>
     <button id="load">载入注释</button>
     <input id="json" type="file" accept=".json" hidden>
@@ -195,7 +200,7 @@
         <span style="flex:1"></span>
         <span class="hbtn" id="clearframe" title="清空当前轨道在这一帧的所有注释">清空本帧</span>
         <span class="hbtn" id="clearall" title="清空这个视频的全部注释">清空全部</span>
-        <span class="hbtn" id="onion" title="洋葱皮：显示前后帧的注释残影">洋葱皮</span>
+
       </h4>
       <div id="marks"></div>
       <div id="detail">
@@ -229,8 +234,8 @@
     <button id="setout" title="标记出点 (O)">出点</button>
     <button id="loop" title="循环播放选区 (L)">循环</button>
     <span id="rangeshow" class="tag">无选区</span>
-    <span id="savehint" class="tag" style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-    <button id="clearrange" class="icon">清选区</button>
+    <span id="savehint" class="tag" style="display:none"></span>
+    <button id="clearrange" class="icon" title="重置成整段视频">重置选区</button>
   </div>
 </div>
 
@@ -247,7 +252,7 @@
   const KIND = { pen: '画笔', line: '箭头', rect: '方框', text: '文字' };
 
   const S = {
-    fps: 24, tool: 'pen', frame: 0, videoName: '',
+    fps: 24, tool: 'select', frame: 0, videoName: '',
     tracks: [
       { id: 't1', name: '画笔', color: '#ff2d55', hidden: false, role: 'pen' },
       { id: 't2', name: '文字', color: '#4ea1ff', hidden: false, role: 'text' }
@@ -255,7 +260,7 @@
     track: 't1',
     items: [], sel: null, drawing: null, seq: 1, tid: 3, erasing: false, textDraft: null, cursor: null,
     videos: [], videoIndex: -1, curVideoName: '', curPath: '', proj: null,
-    onion: false, onionSpan: 2, hist: [ JSON.stringify([]) ], histPos: 0, hist: [ JSON.stringify([]) ], histPos: 0,
+    onion: false, onionSpan: 2, scrubFrame: null, hist: [ JSON.stringify([]) ], histPos: 0,
     range: { in: null, out: null, loop: false }
   };
 
@@ -271,10 +276,17 @@
       row.className = 'trk' + (S.track === t.id ? ' sel' : '');
       row.innerHTML = '<span class="chip" data-color="' + t.id + '" style="background:' + t.color + '" title="换颜色"></span>' +
         '<span class="nm" data-rename="' + t.id + '" title="双击改名">' + escapeHtml(t.name) + '</span>' +
+        '<span class="op onion' + (t.onion ? ' on' : '') + '" data-onion="' + t.id + '" title="这个轨道显示前后帧残影">洋葱</span>' +
         '<span class="op ' + (t.hidden ? 'off' : '') + '" data-sw="' + t.id + '">' + (t.hidden ? '隐藏' : '显示') + '</span>' +
         '<span class="op del" data-del="' + t.id + '" title="删除轨道">×</span>';
       row.onclick = (e) => {
         const d = e.target.dataset;
+        if (d.onion) {
+          t.onion = !t.onion;
+          renderTracks(); renderFrame(); autosave();
+          say('「' + t.name + '」洋葱皮：' + (t.onion ? '开' : '关'));
+          return;
+        }
         if (d.sw) { t.hidden = !t.hidden; renderTracks(); renderFrame(); drawTimeline(); return; }
         if (d.del) { removeTrack(t.id); return; }
         if (d.color) {
@@ -282,7 +294,6 @@
           if (c && /^#[0-9a-f]{6}$/i.test(c.trim())) { t.color = c.trim(); renderTracks(); renderFrame(); drawTimeline(); autosave(); }
           return;
         }
-        if (d.rename) return;
         S.track = t.id; $('color').value = t.color; renderTracks();
       };
       const nm = row.querySelector('[data-rename]');
@@ -343,10 +354,12 @@
     v.load();
     drop.classList.add('hide');
     v.addEventListener('loadedmetadata', () => {
+      restoreRange();
       syncSeekMax();
       syncCanvasSize();
       if (fromFolder) loadSidecar(); else loadAutosave();
       seekFrame(0);
+      restoreRange();
       renderTracks(); renderMarks(); drawTimeline(); renderRangeLabel();
       updateSaveHint();
     }, { once: true });
@@ -390,9 +403,10 @@
 
   function updateHUD() {
     syncSeekMax();
-    $('frame').textContent = '帧 ' + S.frame + ' / ' + frameCount();
-    $('seek').value = S.frame;
-    $('jump').value = S.frame;
+    const shown = (S.scrubFrame != null) ? S.scrubFrame : S.frame;
+    $('frame').textContent = '帧 ' + shown + ' / ' + frameCount();
+    $('seek').value = shown;
+    $('jump').value = shown;
     renderRangeLabel();
   }
 
@@ -402,6 +416,39 @@
     const a = S.range.in == null ? 0 : Math.max(0, Math.min(S.range.in, total - 1));
     const b = S.range.out == null ? total - 1 : Math.max(a, Math.min(S.range.out, total - 1));
     return { a, b };
+  }
+
+  // 打开视频时：存过选区就还原，没存过就是整段
+  function restoreRange() {
+    const total = frameCount();
+    const r = S.range || {};
+    const ok = r.custom && r.in != null && r.out != null &&
+      r.in >= 0 && r.out <= total - 1 && r.out > r.in;
+    if (!ok) {
+      S.range.in = 0;
+      S.range.out = Math.max(0, total - 1);
+      S.range.loop = false;
+      S.range.custom = false;
+    }
+    renderRangeLabel(); drawTimeline();
+  }
+
+  // 打开视频时把选区重置成整段（不还原上次存的选区）
+  function resetRangeToFull() {
+    const total = frameCount();
+    S.range.in = 0;
+    S.range.out = Math.max(0, total - 1);
+    S.range.loop = false;
+    S.range.custom = false;
+    renderRangeLabel(); drawTimeline();
+  }
+
+  // 新视频进来、或者还没设过入出点时，默认就是整段
+  function ensureRange() {
+    const total = frameCount();
+    if (S.range.in == null || S.range.in > total - 1) S.range.in = 0;
+    if (S.range.out == null || S.range.out > total - 1) S.range.out = Math.max(0, total - 1);
+    if (S.range.out < S.range.in) S.range.out = Math.max(0, total - 1);
   }
 
   function renderRangeLabel() {
@@ -415,32 +462,85 @@
   }
 
   $('setin').onclick = () => {
+    S.range.custom = true;
     S.range.in = S.frame;
     if (S.range.out != null && S.range.out < S.frame) S.range.out = S.frame;
     renderRangeLabel(); drawTimeline(); autosave(); say('入点 ' + S.frame);
   };
   $('setout').onclick = () => {
+    S.range.custom = true;
     S.range.out = S.frame;
     if (S.range.in != null && S.range.in > S.frame) S.range.in = S.frame;
     renderRangeLabel(); drawTimeline(); autosave(); say('出点 ' + S.frame);
   };
   $('loop').onclick = () => { S.range.loop = !S.range.loop; renderRangeLabel(); autosave(); };
-  $('clearrange').onclick = () => { S.range = { in: null, out: null, loop: false }; renderRangeLabel(); drawTimeline(); autosave(); };
+  $('clearrange').onclick = () => {
+    const total = frameCount();
+    S.range.in = 0;
+    S.range.out = Math.max(0, total - 1);
+    S.range.loop = false;
+    renderRangeLabel(); drawTimeline(); autosave();
+    say('选区已重置为整段');
+  };
 
-  v.addEventListener('timeupdate', () => {
+  // 提前定时停：光靠"每帧检查"永远慢半拍（画面已经翻过去了 JS 才收到），
+  // 所以播放时按剩余毫秒数预约一次暂停，到出点前一瞬就停。
+  let stopTimer = 0;
+  function scheduleStopAtOut() {
+    clearTimeout(stopTimer);
+    if (v.paused || S.range.out == null) return;
+    const r = rangeBounds();
+    // 出点这一帧占据 [out/fps, (out+1)/fps)，停在它中间最稳
+    const outTime = (r.b + 5) / S.fps;        // 只当兜底，正常由帧回调先停
+    const ms = (outTime - v.currentTime) * 1000;
+    if (ms <= 0) { doStopAtOut(); return; }
+    stopTimer = setTimeout(doStopAtOut, ms);
+  }
+  function doStopAtOut(frameAtStop) {
     if (v.paused) return;
+    clearTimeout(stopTimer);
+    const r = rangeBounds();
+    if (S.range.loop) {
+      v.currentTime = r.a / S.fps;
+      v.play();
+      scheduleStopAtOut();
+      return;
+    }
+    v.pause();                       // 停住，不动位置，画面就留在这一帧
+    S.frame = (frameAtStop != null) ? frameAtStop : r.b;
+    renderFrame(); renderMarks(); updateHUD(); drawTimeline();
+  }
+  v.addEventListener('seeked', () => {
+    if (draggingRange) return;
+    if (S.scrubFrame != null) {
+      S.scrubFrame = null;
+      renderFrame(); updateHUD(); drawTimeline();
+    }
+  });
+  v.addEventListener('play', () => { scheduleStopAtOut(); });
+  v.addEventListener('pause', () => { clearTimeout(stopTimer); });
+  v.addEventListener('seeking', () => { if (!v.paused) scheduleStopAtOut(); });
+
+  // 边界判断：每帧都查，别等 timeupdate（它 250ms 才来一次，高帧率会冲过去几十帧）
+  let boundaryLock = false;
+  function checkRangeBoundary() {
+    if (v.paused || boundaryLock) return;
     if (S.range.out == null) return;
     const r = rangeBounds();
     const cur = v.currentTime * S.fps;
-    if (cur >= r.b + 1) {
+    if (cur > r.b + 0.5) {          // 过了出点
+      boundaryLock = true;
       if (S.range.loop) {
-        v.currentTime = Math.min((r.a + 0.5) / S.fps, Math.max(0, (v.duration || 0) - 0.001));
+        v.currentTime = Math.min(r.a / S.fps, Math.max(0, (v.duration || 0) - 0.001));
+        boundaryLock = false;
       } else {
         v.pause();
-        v.currentTime = Math.min((r.b + 0.5) / S.fps, Math.max(0, (v.duration || 0) - 0.001));
+        v.currentTime = Math.min(r.b / S.fps, Math.max(0, (v.duration || 0) - 0.001));
+        setTimeout(() => { boundaryLock = false; }, 120);
       }
     }
-  });
+  }
+  v.addEventListener('timeupdate', checkRangeBoundary);
 
   // ---------------- 渲染 ----------------
   function visibleItems(f) {
@@ -502,20 +602,23 @@
   }
 
   function renderFrameNow() {
+    try { checkRangeBoundary(); } catch (e) {}
     ctx.clearRect(0, 0, cv.width, cv.height);
 
-    // 洋葱皮：前几帧（偏红）和后几帧（偏青）的注释淡影
-    if (S.onion) {
+    // 洋葱皮：只对「开了洋葱皮」的轨道生效，显示它前后几帧的淡影
+    const onionTracks = S.tracks.filter(tr => tr.onion);
+    if (onionTracks.length) {
+      const ids = onionTracks.map(tr => tr.id);
       const span = S.onionSpan || 2;
       for (let d = span; d >= 1; d--) {
         const a = 0.30 - (d - 1) * 0.08;
         const prev = S.frame - d, next = S.frame + d;
         if (prev >= 0) {
-          S.items.filter(it => { const tr = trackOf(it.track); return tr && !tr.hidden && prev >= it.start && prev <= it.end; })
+          S.items.filter(it => ids.includes(it.track) && prev >= it.start && prev <= it.end)
             .forEach(it => paint(it, null, null, null, a));
         }
         if (next < frameCount()) {
-          S.items.filter(it => { const tr = trackOf(it.track); return tr && !tr.hidden && next >= it.start && next <= it.end; })
+          S.items.filter(it => ids.includes(it.track) && next >= it.start && next <= it.end)
             .forEach(it => paint(it, null, null, null, a * 0.8));
         }
       }
@@ -549,7 +652,8 @@
     const c = $('tl');
     const rect = $('timeline').getBoundingClientRect();
     if (!rect.width) return;
-    c.width = Math.round(rect.width); c.height = rect.height;
+    const cw = Math.round(rect.width), ch = Math.round(rect.height);
+    if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
     const g = c.getContext('2d');
     g.clearRect(0, 0, c.width, c.height);
     const total = frameCount();
@@ -562,6 +666,21 @@
       g.fillStyle = '#4ea1ff';
       g.fillRect(px(r.a), 0, 1.5, c.height);
       g.fillRect(Math.max(0, px(r.b) - 1.5), 0, 1.5, c.height);
+      // 两端的把手：竖条 + 顶部方块（夹在画布内，端点不会被切掉）
+      const bw = 13, bh = 14;
+      const bx1 = Math.max(0, Math.min(c.width - bw, px(r.a) - bw / 2));
+      const bx2 = Math.max(0, Math.min(c.width - bw, px(r.b) - bw / 2));
+      S._handles = { in: bx1, out: bx2, w: bw };
+      g.fillStyle = '#4ea1ff';
+      g.fillRect(px(r.a) - 1, 0, 2, c.height);
+      g.fillRect(px(r.b) - 1, 0, 2, c.height);
+      g.fillRect(bx1, 0, bw, bh);
+      g.fillRect(bx2, 0, bw, bh);
+      g.fillStyle = '#06121f';
+      g.fillRect(bx1 + 3, 5, 2, 5);
+      g.fillRect(bx1 + 8, 5, 2, 5);
+      g.fillRect(bx2 + 3, 5, 2, 5);
+      g.fillRect(bx2 + 8, 5, 2, 5);
     }
 
     const n = Math.max(1, S.tracks.length);
@@ -578,16 +697,90 @@
       g.globalAlpha = 1;
     });
 
+    const shownFrame = (S.scrubFrame != null) ? S.scrubFrame : S.frame;
     g.fillStyle = '#fff';
-    g.fillRect(px(S.frame) - 1, 0, 2, c.height);
+    g.fillRect(px(shownFrame) - 1, 0, 2, c.height);
   }
 
-  $('timeline').onclick = (e) => {
-    const r = $('timeline').getBoundingClientRect();
-    const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    seekFrame(Math.round(p * (frameCount() - 1)));
-    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-  };
+  let draggingRange = false;   // 拖入出点方块时，别让视频回调抢着改帧号
+
+  // 时间轴：可拖拽跳转，两端方块可拖出入点
+  (() => {
+    const box = $('timeline');
+    const frameAt = (clientX) => {
+      const r = box.getBoundingClientRect();
+      const p = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+      return Math.round(p * (frameCount() - 1));
+    };
+    const xOf = (f) => {
+      const r = box.getBoundingClientRect();
+      return (f / Math.max(1, frameCount() - 1)) * r.width;
+    };
+    let drag = null;   // 'in' | 'out' | 'seek'
+    let scrubAt = 0;   // 上一次真正 seek 的时间（节流用）
+
+    box.addEventListener('pointerdown', (e) => {
+      if (!v.src) return;
+      e.preventDefault();
+      box.setPointerCapture(e.pointerId);
+      const x = e.clientX - box.getBoundingClientRect().left;
+      const h = S._handles;
+      if (h) {
+        if (x >= h.in - 4 && x <= h.in + h.w + 4) drag = 'in';
+        else if (x >= h.out - 4 && x <= h.out + h.w + 4) drag = 'out';
+      }
+      if (!drag && (S.range.in != null || S.range.out != null)) {
+        const r = rangeBounds();
+        if (Math.abs(x - xOf(r.a)) <= 6) drag = 'in';
+        else if (Math.abs(x - xOf(r.b)) <= 6) drag = 'out';
+      }
+      if (!drag) { drag = 'seek'; seekFrame(frameAt(e.clientX)); }
+      else { draggingRange = true; }
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    });
+
+    box.addEventListener('pointermove', (e) => {
+      const x = e.clientX - box.getBoundingClientRect().left;
+      if (!drag) {
+        // 悬停在把手上时给个可拖的光标
+        const h = S._handles;
+        const onHandle = h && ((x >= h.in - 4 && x <= h.in + h.w + 4) || (x >= h.out - 4 && x <= h.out + h.w + 4));
+        box.style.cursor = onHandle ? 'ew-resize' : 'pointer';
+        return;
+      }
+      const f = frameAt(e.clientX);
+      if (drag === 'seek') { seekFrame(f); return; }
+      S.range.custom = true;
+      let target;
+      if (drag === 'in') {
+        const out = S.range.out == null ? frameCount() - 1 : S.range.out;
+        S.range.in = Math.min(f, out);
+        target = S.range.in;
+      } else {
+        const inn = S.range.in == null ? 0 : S.range.in;
+        S.range.out = Math.max(f, inn);
+        target = S.range.out;
+      }
+      // 拖动中：白线和数字跟着手走，视频等松手再跳（边拖边 seek 一定闪）
+      S.scrubFrame = target;
+      renderRangeLabel(); drawTimeline();
+      updateHUD();
+    });
+
+    const stop = () => {
+      if (drag && drag !== 'seek') {
+        const target = (drag === 'in') ? S.range.in : S.range.out;
+        S.scrubFrame = target;                       // 白线先钉在目标帧
+        if (target != null) seekFrame(target);       // 松手才真正跳过去
+        $('savehint').textContent = '入点 ' + (S.range.in ?? '-') + ' / 出点 ' + (S.range.out ?? '-');
+        autosave();
+      }
+      drag = null;
+      draggingRange = false;
+    };
+    box.addEventListener('pointerup', stop);
+    box.addEventListener('pointercancel', stop);
+  })();
 
   function itemLabel(it) {
     if (it.name) return it.name;
@@ -616,9 +809,38 @@
         ev.stopPropagation();
         S.items = S.items.filter(x => x !== it);
         if (S.sel === it) { S.sel = null; showDetail(); }
-        renderFrame(); renderMarks(); drawTimeline(); autosave();
+        renderFrame(); renderMarks(); drawTimeline();
+        pushHistory(); autosave();
       };
       d.onclick = () => { S.sel = it; seekFrame(it.start); showDetail(); renderMarks(); };
+      // 双击注释名字：直接在原地改，不弹窗
+      const nmEl = d.querySelector('.nm');
+      if (nmEl) {
+        nmEl.ondblclick = (ev) => {
+          ev.stopPropagation();
+          const old = it.name || itemLabel(it);
+          nmEl.innerHTML = '<input type="text" style="width:100%;padding:0 4px;font-size:12.5px;border-radius:4px;border:1px solid var(--accent);background:#2f3642;color:var(--fg)">';
+          const inp = nmEl.querySelector('input');
+          inp.value = old;
+          inp.focus(); inp.select();
+          let done = false;
+          const finish = (ok) => {
+            if (done) return;
+            done = true;
+            const v = inp.value.trim();
+            it.name = (ok && v) ? v : old;
+            S.sel = it;
+            renderMarks(); showDetail(); pushHistory(); autosave();
+          };
+          inp.onclick = (e2) => e2.stopPropagation();
+          inp.onkeydown = (e2) => {
+            e2.stopPropagation();
+            if (e2.key === 'Enter') finish(true);
+            if (e2.key === 'Escape') finish(false);
+          };
+          inp.onblur = () => finish(true);
+        };
+      };
       box.appendChild(d);
     });
   }
@@ -644,6 +866,9 @@
     renderFrame(); renderMarks(); autosave();
   };
   $('dtext').onkeydown = (e) => { e.stopPropagation(); };
+  $('dstart').onchange = () => { pushHistory(); autosave(); };
+  $('dend').onchange = () => { pushHistory(); autosave(); };
+
   $('dstart').oninput = () => {
     if (!S.sel) return;
     S.sel.start = Math.max(0, Math.min(+$('dstart').value | 0, S.sel.end));
@@ -660,7 +885,8 @@
     if (!S.sel) return;
     S.items = S.items.filter(x => x !== S.sel);
     S.sel = null;
-    showDetail(); renderFrame(); renderMarks(); drawTimeline(); autosave();
+    showDetail(); renderFrame(); renderMarks(); drawTimeline();
+    pushHistory(); autosave();
   };
 
   // ---------------- 画 ----------------
@@ -686,6 +912,18 @@
     return { x1: x1 - pad, y1: y1 - pad, x2: x2 + pad, y2: y2 + pad };
   }
 
+  // 找到这个点上最靠上的一条注释
+  function topItemAt(p) {
+    for (let i = S.items.length - 1; i >= 0; i--) {
+      const it = S.items[i];
+      const tr = trackOf(it.track);
+      if (!tr || tr.hidden) continue;
+      if (S.frame < it.start || S.frame > it.end) continue;
+      if (hitItem(it, p)) return it;
+    }
+    return null;
+  }
+
   function hitItem(it, p) {
     if (!it || S.frame < it.start || S.frame > it.end) return false;
     const b = boundsOf(it);
@@ -707,13 +945,36 @@
       eraseAlong(posOf(e));
       return;
     }
-    // 先把「已经选中的那条」拽走
     const p0 = posOf(e);
+
+    // 已经选中的那条：直接拖走
     if (S.sel && S.tool !== 'eraser' && hitItem(S.sel, p0)) {
       cv.setPointerCapture(e.pointerId);
       moving = { item: S.sel, from: p0, orig: S.sel.points.map(q => ({ x: q.x, y: q.y })) };
       cv.style.cursor = 'move';
       return;
+    }
+
+    // 选择模式：点到谁选谁，点空白取消选中
+    if (S.tool === 'select') {
+      const hit = topItemAt(p0);
+      if (hit) {
+        S.sel = hit;
+        showDetail(); renderMarks();
+        cv.setPointerCapture(e.pointerId);
+        moving = { item: hit, from: p0, orig: hit.points.map(q => ({ x: q.x, y: q.y })) };
+        cv.style.cursor = 'move';
+      } else {
+        S.sel = null;
+        showDetail(); renderMarks(); renderFrame();
+      }
+      return;
+    }
+
+    // 画的时候点到空白处，先把选中取消掉，再开始画
+    if (S.sel && !topItemAt(p0)) {
+      S.sel = null;
+      showDetail(); renderMarks();
     }
 
     if (S.tool === 'text') { startText(e); return; }
@@ -774,7 +1035,8 @@
     if (!kill.length) { say('这一帧这条轨道没有注释'); return; }
     S.items = S.items.filter(x => !kill.includes(x));
     if (kill.includes(S.sel)) { S.sel = null; showDetail(); }
-    renderFrame(); renderMarks(); drawTimeline(); autosave();
+    renderFrame(); renderMarks(); drawTimeline();
+    pushHistory(); autosave();
     say('清空了 ' + kill.length + ' 条');
   };
 
@@ -808,9 +1070,14 @@
   $('erasize').oninput = () => { renderFrame(); };
 
   cv.addEventListener('pointermove', (e) => {
-    if (moving || !S.sel) return;
-    if (hitItem(S.sel, posOf(e))) cv.style.cursor = 'move';
-    else cv.style.cursor = S.tool === 'text' ? 'text' : (S.tool === 'eraser' ? 'cell' : 'crosshair');
+    if (moving) return;
+    const p = posOf(e);
+    if (S.sel && hitItem(S.sel, p)) { cv.style.cursor = 'move'; return; }
+    if (S.tool === 'select') {
+      cv.style.cursor = topItemAt(p) ? 'pointer' : 'default';
+      return;
+    }
+    cv.style.cursor = S.tool === 'text' ? 'text' : (S.tool === 'eraser' ? 'cell' : 'crosshair');
   });
 
   cv.addEventListener('pointerleave', () => {
@@ -835,16 +1102,18 @@
     if (moving) {
       moving = null;
       cv.style.cursor = S.tool === 'text' ? 'text' : (S.tool === 'eraser' ? 'cell' : 'crosshair');
-      renderMarks(); drawTimeline(); autosave();
+      renderMarks(); drawTimeline();
+      pushHistory(); autosave();      // 移动也算一次操作，能撤回
       return;
     }
-    if (S.erasing) { S.erasing = false; return; }
+    if (S.erasing) { S.erasing = false; pushHistory(); autosave(); return; }
     if (!S.drawing) return;
     const it = S.drawing;
     S.drawing = null;
     if (it.tool === 'pen' && it.points.length > 1) it.points = resample(it.points, Math.max(2.5, it.size * 0.6));
     if (it.points.length) { S.items.push(it); S.sel = it; }
-    renderFrame(); renderMarks(); showDetail(); drawTimeline(); autosave();
+    renderFrame(); renderMarks(); showDetail(); drawTimeline();
+    pushHistory(); autosave();
   });
 
   function startText(e) {
@@ -896,11 +1165,18 @@
     if (!raw) { renderFrame(); return; }
     d.text = raw;
     S.items.push(d); S.sel = d;
-    renderFrame(); renderMarks(); showDetail(); drawTimeline(); autosave();
+    renderFrame(); renderMarks(); showDetail(); drawTimeline();
+    pushHistory(); autosave();
   }
 
   // ---------------- 播放 ----------------
-  $('play').onclick = () => v.paused ? v.play() : v.pause();
+  $('play').onclick = () => {
+    if (!v.paused) { v.pause(); return; }
+    const r = rangeBounds();
+    const cur = v.currentTime * S.fps;
+    if (S.range.out != null && cur >= r.b - 0.5) v.currentTime = r.a / S.fps;   // 停在出点上就从头播这段
+    v.play();
+  };
   v.addEventListener('durationchange', () => { syncSeekMax(); updateHUD(); });
   v.addEventListener('loadedmetadata', () => { syncSeekMax(); });
   v.addEventListener('play', () => $('play').textContent = '暂停');
@@ -908,17 +1184,25 @@
 
   const hasRVFC = typeof v.requestVideoFrameCallback === 'function';
   function onVideoFrame(now, meta) {
+    if (draggingRange) return;
     if (v.src) {
       const mt = (meta && typeof meta.mediaTime === 'number') ? meta.mediaTime : v.currentTime;
       const n = Math.max(0, Math.round(mt * S.fps));
       if (n !== S.frame) { S.frame = n; renderFrame(); updateHUD(); drawTimeline(); }
+      // 屏幕上正在显示的这一帧如果已经是出点，立刻停住
+      if (!v.paused && S.range.out != null) {
+        const r = rangeBounds();
+        const shown = Math.floor(mt * S.fps + 0.02);
+        if (shown >= r.b) { doStopAtOut(r.b); }
+      }
     }
     if (!v.paused) v.requestVideoFrameCallback(onVideoFrame);
   }
   v.addEventListener('play', () => { if (hasRVFC) v.requestVideoFrameCallback(onVideoFrame); });
 
   (function tick() {
-    if (!hasRVFC && !v.paused && v.src) {
+    try { checkRangeBoundary(); } catch (e) {}
+    if (!draggingRange && !hasRVFC && !v.paused && v.src) {
       const n = frameNow();
       if (n !== S.frame) { S.frame = n; renderFrame(); updateHUD(); drawTimeline(); }
     }
@@ -933,7 +1217,9 @@
     if (isTextField) return;
     if (t.tagName === 'INPUT' && t.type === 'range' && (e.code === 'Space' || e.key.indexOf('Arrow') === 0)) e.preventDefault();
 
-    if (e.code === 'Space') { e.preventDefault(); v.paused ? v.play() : v.pause(); }
+    if (e.key === 'v' || e.key === 'V') { setTool('select'); return; }
+    if (e.key === 'Escape' && S.sel) { S.sel = null; showDetail(); renderMarks(); return; }
+    if (e.code === 'Space') { e.preventDefault(); $('play').click(); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); seekFrame(S.frame - 1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); seekFrame(S.frame + 1); }
     else if (e.key === '1') setTool('pen');
@@ -1121,7 +1407,7 @@
     renderMarks(); drawTimeline(); updateHUD();
     seekFrame(Math.min(S.frame, frameCount() - 1));
   };
-  $('seek').oninput = (e) => seekFrame(+e.target.value);
+  $('seek').oninput = (e) => { seekFrame(+e.target.value); if (!v.paused) scheduleStopAtOut(); };
   $('seek').onpointerup = (e) => e.target.blur();
   $('seek').onchange = (e) => e.target.blur();
   $('gojump').onclick = (e) => { seekFrame(+$('jump').value); e.target.blur(); };
@@ -1136,12 +1422,15 @@
     S.tid = S.tracks.length + 1;
     S.sel = null; showDetail();
     renderTracks(); renderFrame(); renderMarks(); drawTimeline(); renderRangeLabel();
+    S.hist = [JSON.stringify(S.items)];      // 以当前状态为撤销起点
+    S.histPos = 0;
+    updateHistButtons();
     if (!silent) say('读入 ' + S.items.length + ' 条注释 / ' + S.tracks.length + ' 条轨道');
   }
   function payload() {
     return {
       app: 'lapian', version: 3, video: S.videoName, fps: S.fps,
-      tracks: S.tracks, items: S.items, range: S.range,
+      tracks: S.tracks, items: S.items, range: Object.assign({}, S.range),
       savedAt: new Date().toISOString()
     };
   }
@@ -1218,11 +1507,11 @@
     if (DESK) {
       if (bindBtn) bindBtn.style.display = 'none';
       const ex = $('export'); if (ex) ex.style.display = 'none';
-      $('savehint').textContent = S.curPath ? ('注释存在视频旁边：' + S.curPath.split('\\').pop() + ' → 同名 .json') : '导入视频后，注释自动存在视频旁边';
+      $('savehint').textContent = '注释存在视频旁边（同名 .json）';
       return;
     }
     if (dirHandle) {
-      $('savehint').textContent = '注释自动存在视频旁边：' + noteFileName();
+      $('savehint').textContent = '注释自动存在视频旁边';
       if (bindBtn) bindBtn.style.display = 'none';     // 已经绑定了，按钮不用露脸
     } else if (FS_OK) {
       $('savehint').textContent = '单独导入视频时，点一次「绑定文件夹」选所在目录即可（拖文件夹进来会自动绑定）';
@@ -1416,6 +1705,7 @@
         }
       } catch (e) {}
       seekFrame(0);
+      restoreRange();
       renderTracks(); renderMarks(); drawTimeline(); renderRangeLabel();
       updateSaveHint();
       if (DESK && S.proj) {
@@ -1469,12 +1759,7 @@
     e.stopPropagation();
     if (e.key === 'Escape') { $('vidsearch').value = ''; renderVideos(); }
   };
-  $('onion').onclick = () => {
-    S.onion = !S.onion;
-    $('onion').classList.toggle('on', S.onion);
-    renderFrame();
-    say('洋葱皮：' + (S.onion ? '开（前后各 ' + S.onionSpan + ' 帧）' : '关'));
-  };
+
   $('importdir').onclick = async () => {
     if (!DESK) { importFolder(); return; }
     const r = await window.lapian.pickFolder();
@@ -1504,12 +1789,19 @@
   })();
 
   $('bind').onclick = () => pickFolder();
-  $('save').onclick = () => { DESK ? saveNotesDesktop(false) : saveBesideVideo(false); };
+  $('save').onclick = async () => {
+    if (!DESK) { downloadNotes(); return; }
+    const name = (S.curVideoName || 'notes').replace(/.[^.]+$/, '') + '.拉片注释.json';
+    const r = await window.lapian.notesSaveAs(payload(), name);
+    if (r && r.ok) { $('savehint').textContent = '已另存到别处'; say('已另存到 ' + r.path); }
+    else if (r && r.error) say('另存失败：' + r.error);
+  };
   $('clearall').onclick = () => {
     if (!S.items.length) { say('没有注释'); return; }
     if (!confirm('清空这个视频的全部注释（' + S.items.length + ' 条）？')) return;
     S.items = []; S.sel = null; showDetail();
-    renderFrame(); renderMarks(); drawTimeline(); autosave();
+    renderFrame(); renderMarks(); drawTimeline();
+    pushHistory(); autosave();
     if (DESK) { saveNotesDesktop(true); markNoteState(S.curPath, false); }
     say('已清空');
   };
@@ -1542,15 +1834,8 @@
   };
 
   const akey = () => 'lapian3:' + (S.videoName || 'none');
-  let histTimer = 0;
-  function touchChange() {                 // 有真实改动时才记历史
-    clearTimeout(histTimer);
-    histTimer = setTimeout(() => { try { pushHistory(); } catch (e) {} }, 350);
-  }
-
   let lsTimer = 0;
   function autosave() {
-    touchChange();
     clearTimeout(lsTimer);
     lsTimer = setTimeout(() => {
       try {
@@ -1939,8 +2224,7 @@
   function renderProjName() {
     const b = $('projbtn');
     if (b) b.textContent = S.proj ? ('工程：' + S.proj.name) : '工程';
-    const dp = $('delproj');
-    if (dp) dp.style.display = S.proj ? '' : 'none';
+
   }
   // ---------------- 启动页 ----------------
   async function showStartup() {
@@ -2043,16 +2327,7 @@
   const _sp = $('saveproj');
   if (_sp) _sp.onclick = () => { autoSaveProject(); say('已保存'); };
 
-  $('delproj').onclick = async () => {
-    if (!S.proj) { say('当前没有打开工程'); return; }
-    if (!confirm('把「' + S.proj.name + '」从工程列表里删掉？\n（视频和注释文件都不会删）')) return;
-    try { await window.lapian.projectRemove(S.proj.id); } catch (e) {}
-    S.proj = null;
-    S.videos = []; S.videoIndex = -1;
-    renderVideos(); renderProjName(); renderMarks(); renderFrame(); drawTimeline();
-    say('工程已从列表删除');
-    showStartup();
-  };
+
 
   if (DESK) {
     window.lapian.onMenu((cmd) => {
@@ -2068,6 +2343,7 @@
 
   renderTracks(); renderMarks(); drawTimeline(); renderRangeLabel();
   renderProjName();
+  window.__ink = { get s() { return S; }, ensureRange, drawTimeline, renderRangeLabel, autosave, saveNow: (s) => saveNotesDesktop(s), open: (p, n) => loadVideoPath({ path: p, name: n }) };
   if (DESK) setTimeout(showStartup, 60);
   window.addEventListener('resize', () => drawTimeline());
 })();

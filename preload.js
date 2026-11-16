@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('lapian', {
   listVideos: (dir) => ipcRenderer.invoke('list-videos', dir),
   statPath: (p) => ipcRenderer.invoke('stat-path', p),
   renameVideo: (oldPath, newName) => ipcRenderer.invoke('rename-video', oldPath, newName),
+  notesSaveAs: (d, name) => ipcRenderer.invoke('notes-save-as', d, name),
   notesLoad: (p) => ipcRenderer.invoke('notes-load', p),
   notesSave: (p, data) => ipcRenderer.invoke('notes-save', p, data),
   exportClip: (opt) => ipcRenderer.invoke('export-clip', opt),

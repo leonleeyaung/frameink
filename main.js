@@ -357,6 +357,19 @@ ipcMain.handle('rename-video', (e, oldPath, newName) => {
   } catch (err) { return { ok: false, error: err.message }; }
 });
 
+ipcMain.handle('notes-save-as', async (e, data, defaultName) => {
+  const r = await dialog.showSaveDialog(win, {
+    title: '注释另存为',
+    defaultPath: path.join(app.getPath('documents'), defaultName || 'notes.json'),
+    filters: [{ name: '注释文件', extensions: ['json'] }]
+  });
+  if (r.canceled) return { ok: false, canceled: true };
+  try {
+    fs.writeFileSync(r.filePath, JSON.stringify(data, null, 2), 'utf8');
+    return { ok: true, path: r.filePath };
+  } catch (err) { return { ok: false, error: err.message }; }
+});
+
 ipcMain.handle('notes-load', async (e, videoPath) => {
   try {
     const np = notePathOf(videoPath);

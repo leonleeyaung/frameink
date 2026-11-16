@@ -1,6 +1,10 @@
-# 拉片标注器 · Lapian Studio
+# FrameInk · 帧墨
 
-一个给动画/影视拉片用的本地标注工具：**逐帧看片 → 在画面上画和写 → 镜头笔记 → 导出片段**。
+> A frame-accurate annotation tool for animation study. Load a clip, step through it
+> frame by frame, draw or write directly on the picture, keep shot notes, and export
+> the marked range as a video — all locally, no upload, no account.
+
+给动画/影视拉片用的本地标注工具：**逐帧看片 → 在画面上画和写 → 镜头笔记 → 导出片段**。
 
 原本是网页版，现在做成了桌面软件（Electron），因为网页拿不到真实文件路径、调不了 ffmpeg、也不能自定义右键菜单。
 

@@ -1,12 +1,12 @@
 {
-  "name": "lapian-studio",
+  "name": "frameink",
   "version": "1.0.0",
-  "description": "拉片标注器：逐帧看片 + 画面标注 + 导出片段",
+  "description": "Frame-accurate video annotation for animation study — draw and write on any frame, then export the clip.",
   "main": "main.js",
   "scripts": {
     "start": "electron ."
   },
-  "keywords": ["video", "annotation", "storyboard", "electron", "拉片"],
+  "keywords": ["video", "annotation", "storyboard", "frame-accurate", "electron", "sakuga"],
   "license": "MIT",
   "devDependencies": {
     "electron": "^45.3.2"

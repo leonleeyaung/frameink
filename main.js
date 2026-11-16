@@ -340,7 +340,7 @@ function createTray() {
   try {
     const icon = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
     tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
-    tray.setToolTip('拉片标注器');
+    tray.setToolTip('FrameInk');
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: '显示窗口', click: () => { if (win) { win.show(); win.focus(); } else createWindow(); } },
       { type: 'separator' },

@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>拉片标注器</title>
+<style>
+  :root{--bg:#1b1e24;--panel:#252a33;--panel2:#20242c;--line:#343b47;--fg:#e6e9ef;--dim:#8b93a1;--accent:#4ea1ff;--danger:#ff5b6e;--ok:#57c98b;}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:13.5px/1.5 "Microsoft YaHei UI","Segoe UI",sans-serif;overflow:hidden}
+  #app{display:flex;flex-direction:column;height:100%}
+  #top{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  #top .sp{flex:1}
+  button,select,input[type=number],input[type=text]{background:#2f3642;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer}
+  button:hover{background:#3a4352}
+  button.on{background:var(--accent);border-color:var(--accent);color:#06121f;font-weight:600}
+  button.icon{padding:3px 7px}
+  input[type=number]{width:70px;cursor:text}
+  input[type=text]{cursor:text}
+  input[type=color]{width:28px;height:26px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
+  #main{display:flex;flex:1;min-height:0}
+  #split{width:6px;flex:none;cursor:col-resize;background:#2b313b;border-right:1px solid var(--line)}
+  #split:hover{background:#3d5b7f}
+  #split{width:6px;flex:none;cursor:col-resize;background:#2b313b;border-right:1px solid var(--line)}
+  #split:hover{background:#3d5b7f}
+  #vlist{width:208px;background:var(--panel2);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  #vlist h4{margin:0;padding:7px 10px;font-size:12.5px;color:var(--dim);font-weight:600;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px}
+  #videos{flex:1;overflow:auto;padding:4px 4px;min-height:0}
+  .vi{padding:6px 8px;font-size:12.5px;cursor:pointer;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vi:hover{background:#2a303a}
+  .vi.on{background:#2f3a4a;box-shadow:inset 0 0 0 1px #3d5b7f}
+  .vi .sub{display:block;font-size:11px;color:var(--dim)}
+  .vi{display:flex;align-items:center;gap:6px}
+  .vi > .vdel{color:#5d6674;font-size:13px;line-height:1;padding:2px 6px;border-radius:5px;flex:none;opacity:0;transition:opacity .12s,color .12s}
+  .vi:hover > .vdel{opacity:1}
+  .vi > .vdel:hover{color:#ff5b6e;background:#3a2b2f}
+  #vempty{padding:10px;font-size:12px;color:var(--dim);line-height:1.7}
+  #stage{position:relative;flex:1;display:flex;align-items:center;justify-content:center;background:#0f1116;overflow:hidden}
+  #wrap{position:relative;line-height:0}
+  video{display:block;max-width:100%;max-height:100%;background:#000}
+  #draw{position:absolute;left:0;top:0;cursor:crosshair;touch-action:none}
+  #drop{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--dim);text-align:center}
+  #drop b{color:var(--fg);font-size:18px}
+  #drop.hide{display:none}
+  #txt{position:absolute;display:none;z-index:20;background:#000d;border:1px solid var(--accent);border-radius:6px;color:#fff;padding:6px 8px;font-size:16px;min-width:140px;max-width:420px;outline:none;white-space:pre-wrap;line-height:1.35}
+  #side{width:300px;background:var(--panel2);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  #side h4{margin:0;padding:7px 10px;font-size:12.5px;color:var(--dim);font-weight:600;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+  .hbtn{margin-left:auto;font-size:11.5px;padding:2px 8px;background:#2f3642;border:1px solid var(--line);border-radius:5px;cursor:pointer;color:var(--fg)}
+  .hbtn:hover{background:#3a4352}
+  #tracks{padding:5px 6px;border-bottom:1px solid var(--line);max-height:190px;overflow:auto}
+  .trk{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px;cursor:pointer}
+  .trk:hover{background:#2a303a}
+  .trk.sel{background:#2f3a4a;box-shadow:inset 0 0 0 1px #3d5b7f}
+  .chip{width:11px;height:11px;border-radius:3px;flex:none;cursor:pointer}
+  .trk .nm{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trk .nm input{width:100%;padding:0 4px;font-size:12.5px}
+  .trk .op{font-size:11px;color:var(--dim);padding:0 3px;border-radius:4px;flex:none}
+  .trk .op:hover{background:#3a4352;color:var(--fg)}
+  .trk .op.off{color:#5b6270;text-decoration:line-through}
+  .trk .del{color:#7a6168}
+  .trk .del:hover{color:var(--danger)}
+  #marks{flex:1;overflow:auto;padding:4px 6px;min-height:0}
+  .mk{display:flex;gap:7px;align-items:center;padding:5px 7px;border-radius:6px;cursor:pointer;font-size:12.5px}
+  .mk:hover{background:#2a303a}
+  .mk.sel{background:#2f3a4a;box-shadow:inset 0 0 0 1px #3d5b7f}
+  .mk .f{color:var(--accent);font-variant-numeric:tabular-nums;min-width:46px}
+  .mk .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mk .d{color:var(--dim);font-size:11.5px}
+  #detail{border-top:1px solid var(--line);padding:8px 10px;font-size:12.5px;color:var(--dim);display:none}
+  #detail.show{display:block}
+  #detail .row{display:flex;align-items:center;gap:6px;margin:5px 0}
+  #detail input[type=number]{width:62px;padding:2px 6px}
+  #detail input[type=text]{flex:1;padding:2px 6px}
+  #bar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--panel);border-top:1px solid var(--line);flex-wrap:wrap}
+  #seek{flex:1;min-width:150px}
+  #timeline{height:30px;background:var(--panel);border-top:1px solid var(--line);position:relative;cursor:pointer}
+  #timeline canvas{position:absolute;inset:0;width:100%;height:100%}
+  .tag{font-size:12px;color:var(--dim)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:var(--panel2)}
+  ::-webkit-scrollbar-thumb{background:#e6e9ef;border-radius:6px;border:2px solid var(--panel2)}
+  ::-webkit-scrollbar-thumb:hover{background:#fff}
+  #videos::-webkit-scrollbar-track,#marks::-webkit-scrollbar-track,#tracks::-webkit-scrollbar-track{background:var(--panel2)}
+  input[type=range]{-webkit-appearance:none;height:6px;border-radius:4px;background:#3a4352;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;border:none;cursor:pointer}
+  #hint{position:absolute;left:10px;bottom:10px;color:var(--dim);font-size:11.5px;background:#0008;padding:5px 9px;border-radius:6px;pointer-events:none}
+  #startup{position:fixed;inset:0;background:radial-gradient(1200px 600px at 50% 0%, #232a36 0%, #14171d 70%);z-index:200;display:flex;align-items:center;justify-content:center;padding:30px}
+  #startup.hide{display:none}
+  .su-card{width:min(820px,92vw);max-height:86vh;display:flex;flex-direction:column;gap:14px}
+  .su-title{font-size:26px;font-weight:700;letter-spacing:.5px}
+  .su-sub{color:var(--dim);font-size:13px;margin-top:-8px}
+  .su-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .su-btn{padding:10px 18px;font-size:14px;border-radius:10px;border:1px solid var(--line);background:#2b323d;color:var(--fg);cursor:pointer}
+  .su-btn:hover{background:#37404e}
+  .su-btn.primary{background:var(--accent);border-color:var(--accent);color:#06121f;font-weight:600}
+  .su-list{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#1c212a;min-height:120px}
+  .su-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid #262d38;cursor:pointer}
+  .su-item:last-child{border-bottom:none}
+  .su-item:hover{background:#26303c}
+  .su-item .nm{font-size:14.5px}
+  .su-item .path{font-size:11.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px}
+  .su-item .meta{font-size:11.5px;color:var(--dim);text-align:right}
+  .su-item .del{color:#7a6168;padding:2px 8px;border-radius:6px}
+  .su-item .del:hover{color:var(--danger);background:#3a2b2f}
+  .su-empty{padding:26px;text-align:center;color:var(--dim);font-size:13px}
+  #banner{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#000b;color:#ffd9a0;padding:6px 12px;border-radius:8px;font-size:12.5px;display:none;z-index:30}
+</style>
+</head>
+<body>
+<div id="startup" class="hide">
+  <div class="su-card">
+    <div class="su-title">拉片标注器</div>
+    <div class="su-sub">选一个工程继续，或者新建一个</div>
+    <div class="su-actions">
+      <button class="su-btn primary" id="su-new">＋ 新建工程</button>
+      <button class="su-btn" id="su-file">只导入一个视频</button>
+      <button class="su-btn" id="su-quit">退出</button>
+    </div>
+    <div class="su-list" id="su-list"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="top">
+    <button id="projbtn" title="新建 / 打开 / 最近工程">工程</button>
+    <button id="delproj" title="从列表里删除当前工程">删除工程</button>
+    <button id="open">导入视频</button>
+    <button id="importdir" title="选一个文件夹，把里面的视频都列出来">导入文件夹</button>
+    <input id="file" type="file" accept="video/*" hidden>
+
+    <span class="tag">工具</span>
+    <button data-tool="pen" class="on">画笔</button>
+    <button data-tool="text">文字</button>
+    <button data-tool="line">箭头</button>
+    <button data-tool="rect">方框</button>
+    <button data-tool="eraser" title="局部擦除画笔笔迹">橡皮</button>
+
+    <span class="tag">橡皮</span>
+    <input type="number" id="erasize" min="4" max="160" step="2" value="18" style="width:62px" title="橡皮半径（像素）；在画面上滚轮也能调">
+    <input type="color" id="color" value="#ff2d55">
+    <select id="size">
+      <option value="2">细</option><option value="4" selected>中</option><option value="8">粗</option><option value="14">很粗</option>
+    </select>
+
+    <span class="sp"></span>
+    <button id="undo" class="icon" title="撤销（Ctrl+Z）">↶</button>
+    <button id="redo" class="icon" title="前进（Ctrl+Shift+Z / Ctrl+Y）">↷</button>
+    <button id="bind" title="选一次视频所在文件夹，注释自动存在旁边">绑定文件夹</button>
+    <button id="save">保存</button>
+    <button id="export" title="下载注释文件（换个地方放着）">另存为…</button>
+    <button id="load">载入注释</button>
+    <input id="json" type="file" accept=".json" hidden>
+    <button id="clip" title="把入点到出点这段导出成视频">导出选区</button>
+    <label class="tag" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+      <input type="checkbox" id="clipnotes" checked style="width:auto;cursor:pointer">带注释
+    </label>
+  </div>
+
+  <div id="main">
+    <div id="vlist">
+      <h4>视频 <span id="vidcount" style="color:var(--accent);font-weight:400"></span>
+        <span style="flex:1"></span>
+        <span class="hbtn" id="clearvideos" title="把列表里的视频都清掉（不删文件）">清空</span>
+      </h4>
+      <div id="videos"><div id="vempty">把视频或文件夹拖进来<br>也可以用上面的按钮导入</div></div>
+      <div style="padding:8px 10px;font-size:11.5px;color:var(--dim);border-top:1px solid var(--line);line-height:1.6">
+        直接拖视频或整个文件夹到<b style="color:var(--fg)">窗口任意位置</b>都能加进来
+      </div>
+    </div>
+    <div id="split" title="拖动改变宽度"></div>
+    <div id="stage">
+      <div id="wrap">
+        <video id="v" playsinline></video>
+        <canvas id="draw"></canvas>
+      </div>
+      <div id="drop"><b>把视频或文件夹拖进来</b><span>也可以点左上角「导入视频 / 导入文件夹」</span></div>
+      <div id="txt" contenteditable="true"></div>
+      <div id="hint">空格 播放 / ← → 逐帧 / I、O 标入出点 / L 循环 / Ctrl+Z 撤销</div>
+      <div id="banner"></div>
+    </div>
+
+    <div id="side">
+      <h4>轨道 <span class="hbtn" id="addtrack">+ 新轨道</span></h4>
+      <div id="tracks"></div>
+      <h4>注释 <span id="mkcount" style="color:var(--accent)"></span>
+        <span style="flex:1"></span>
+        <span class="hbtn" id="clearframe" title="清空当前轨道在这一帧的所有注释">清空本帧</span>
+        <span class="hbtn" id="clearall" title="清空这个视频的全部注释">清空全部</span>
+        <span class="hbtn" id="onion" title="洋葱皮：显示前后帧的注释残影">洋葱皮</span>
+      </h4>
+      <div id="marks"></div>
+      <div id="detail">
+        <div class="row">名称 <input type="text" id="dname" placeholder="给这条注释起个名"></div>
+        <div class="row" id="dtextrow" style="display:none;align-items:flex-start">
+          内容 <textarea id="dtext" rows="2" style="flex:1;padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:#2f3642;color:var(--fg);font:inherit;resize:vertical"></textarea>
+        </div>
+        <div class="row">起始帧 <input type="number" id="dstart"> 结束帧 <input type="number" id="dend"></div>
+        <div class="row" style="color:var(--dim);font-size:11.5px">选中后可直接在画面上拖动它换位置</div>
+        <div class="row">持续 <span id="dlen" style="color:var(--fg)"></span> 帧
+          <span style="flex:1"></span>
+          <button id="ddel" class="icon" style="color:var(--danger)">删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="timeline"><canvas id="tl"></canvas></div>
+
+  <div id="bar">
+    <button id="play">播放</button>
+    <span id="frame" class="tag">帧 0 / 0</span>
+    <input type="range" id="seek" min="0" max="0" value="0" step="1">
+    <span class="tag">帧率</span>
+    <input type="number" id="fps" min="1" max="240" step="0.001" value="24" style="width:74px">
+    <span class="tag">跳到</span>
+    <input type="number" id="jump" min="0" value="0" style="width:78px">
+    <button id="gojump" class="icon">跳</button>
+    <span style="width:6px"></span>
+    <button id="setin" title="标记入点 (I)">入点</button>
+    <button id="setout" title="标记出点 (O)">出点</button>
+    <button id="loop" title="循环播放选区 (L)">循环</button>
+    <span id="rangeshow" class="tag">无选区</span>
+    <span id="savehint" class="tag" style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+    <button id="clearrange" class="icon">清选区</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const v = $('v'), cv = $('draw'), ctx = cv.getContext('2d');
+  const stage = $('stage'), drop = $('drop'), txtBox = $('txt'), banner = $('banner');
+
+  const DESK = !!(window.lapian && window.lapian.isDesktop);
+
+  const PALETTE = ['#ff2d55', '#4ea1ff', '#57c98b', '#e5a13c', '#b47cff', '#00c8d7', '#ff8a3d', '#9aa4b2'];
+  const KIND = { pen: '画笔', line: '箭头', rect: '方框', text: '文字' };
+
+  const S = {
+    fps: 24, tool: 'pen', frame: 0, videoName: '',
+    tracks: [
+      { id: 't1', name: '画笔', color: '#ff2d55', hidden: false, role: 'pen' },
+      { id: 't2', name: '文字', color: '#4ea1ff', hidden: false, role: 'text' }
+    ],
+    track: 't1',
+    items: [], sel: null, drawing: null, seq: 1, tid: 3, erasing: false, textDraft: null, cursor: null,
+    videos: [], videoIndex: -1, curVideoName: '', curPath: '', proj: null,
+    onion: false, onionSpan: 2, hist: [ JSON.stringify([]) ], histPos: 0, hist: [ JSON.stringify([]) ], histPos: 0,
+    range: { in: null, out: null, loop: false }
+  };
+
+  const trackOf = (id) => S.tracks.find(t => t.id === id) || S.tracks[0];
+  const escapeHtml = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // ---------------- 轨道 ----------------
+  function renderTracks() {
+    const box = $('tracks');
+    box.innerHTML = '';
+    S.tracks.forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'trk' + (S.track === t.id ? ' sel' : '');
+      row.innerHTML = '<span class="chip" data-color="' + t.id + '" style="background:' + t.color + '" title="换颜色"></span>' +
+        '<span class="nm" data-rename="' + t.id + '" title="双击改名">' + escapeHtml(t.name) + '</span>' +
+        '<span class="op ' + (t.hidden ? 'off' : '') + '" data-sw="' + t.id + '">' + (t.hidden ? '隐藏' : '显示') + '</span>' +
+        '<span class="op del" data-del="' + t.id + '" title="删除轨道">×</span>';
+      row.onclick = (e) => {
+        const d = e.target.dataset;
+        if (d.sw) { t.hidden = !t.hidden; renderTracks(); renderFrame(); drawTimeline(); return; }
+        if (d.del) { removeTrack(t.id); return; }
+        if (d.color) {
+          const c = prompt('轨道颜色（十六进制，如 #ff2d55）', t.color);
+          if (c && /^#[0-9a-f]{6}$/i.test(c.trim())) { t.color = c.trim(); renderTracks(); renderFrame(); drawTimeline(); autosave(); }
+          return;
+        }
+        if (d.rename) return;
+        S.track = t.id; $('color').value = t.color; renderTracks();
+      };
+      const nm = row.querySelector('[data-rename]');
+      nm.ondblclick = (e) => { e.stopPropagation(); startRename(nm, t); };
+      box.appendChild(row);
+    });
+  }
+
+  function startRename(nmEl, t) {
+    const old = t.name;
+    nmEl.innerHTML = '<input type="text" value="' + escapeHtml(old) + '">';
+    const inp = nmEl.querySelector('input');
+    inp.focus(); inp.select();
+    let finished = false;
+    const done = (ok) => {
+      if (finished) return;
+      finished = true;
+      const val = inp.value.trim();
+      t.name = (ok && val) ? val : old;
+      renderTracks(); renderMarks(); autosave();
+    };
+    inp.onclick = (e) => e.stopPropagation();
+    inp.onkeydown = (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') done(true);
+      if (e.key === 'Escape') done(false);
+    };
+    inp.onblur = () => done(true);
+  }
+
+  $('addtrack').onclick = () => {
+    const n = S.tracks.length + 1;
+    const id = 't' + (S.tid++);
+    S.tracks.push({ id, name: '轨道 ' + n, color: PALETTE[(n - 1) % PALETTE.length], hidden: false, role: null });
+    S.track = id;
+    $('color').value = trackOf(id).color;
+    renderTracks(); drawTimeline(); autosave();
+    say('已添加轨道 ' + n);
+  };
+
+  function removeTrack(id) {
+    if (S.tracks.length <= 1) { say('至少要留一条轨道'); return; }
+    const n = S.items.filter(it => it.track === id).length;
+    if (n && !confirm('这条轨道上有 ' + n + ' 条注释，删轨道会一起删掉。确定？')) return;
+    S.items = S.items.filter(it => it.track !== id);
+    S.tracks = S.tracks.filter(t => t.id !== id);
+    if (S.track === id) { S.track = S.tracks[0].id; $('color').value = S.tracks[0].color; }
+    if (S.sel && !S.items.includes(S.sel)) { S.sel = null; showDetail(); }
+    renderTracks(); renderFrame(); renderMarks(); drawTimeline(); autosave();
+  }
+
+  // ---------------- 视频 ----------------
+  function loadVideo(file, fromFolder) {
+    if (!file) return;
+    S.videoName = file.name;
+    S.items = []; S.sel = null; S.frame = 0;
+    v.src = URL.createObjectURL(file);
+    v.load();
+    drop.classList.add('hide');
+    v.addEventListener('loadedmetadata', () => {
+      syncSeekMax();
+      syncCanvasSize();
+      if (fromFolder) loadSidecar(); else loadAutosave();
+      seekFrame(0);
+      renderTracks(); renderMarks(); drawTimeline(); renderRangeLabel();
+      updateSaveHint();
+    }, { once: true });
+  }
+
+  function syncCanvasSize() {
+    cv.width = v.videoWidth || 1280;
+    cv.height = v.videoHeight || 720;
+    const fit = () => {
+      const b = v.getBoundingClientRect();
+      cv.style.width = b.width + 'px';
+      cv.style.height = b.height + 'px';
+    };
+    fit();
+    requestAnimationFrame(fit);
+    setTimeout(fit, 150);
+    window.onresize = () => { fit(); drawTimeline(); };
+  }
+
+  const frameCount = () => Math.max(1, Math.floor((v.duration || 0) * S.fps));
+  const frameNow = () => Math.max(0, Math.round((v.currentTime || 0) * S.fps));
+
+  function seekFrame(n) {
+    if (S.textDraft) commitText();
+    n = Math.max(0, Math.min(frameCount() - 1, Math.round(n)));
+    v.pause();
+    const t = Math.min((n + 0.5) / S.fps, Math.max(0, (v.duration || 0) - 0.0008));
+    if (Math.abs(v.currentTime - t) > 1e-6) v.currentTime = t;
+    S.frame = n;
+    renderFrame(); updateHUD(); drawTimeline();
+  }
+
+  function syncSeekMax() {
+    const max = Math.max(0, frameCount() - 1);
+    const el = $('seek');
+    if (el.max !== String(max)) el.max = max;
+    if (+el.value > max) el.value = max;
+    const jp = $('jump');
+    if (jp && +jp.value > max) jp.value = max;
+  }
+
+  function updateHUD() {
+    syncSeekMax();
+    $('frame').textContent = '帧 ' + S.frame + ' / ' + frameCount();
+    $('seek').value = S.frame;
+    $('jump').value = S.frame;
+    renderRangeLabel();
+  }
+
+  // ---------------- 选区 ----------------
+  function rangeBounds() {
+    const total = frameCount();
+    const a = S.range.in == null ? 0 : Math.max(0, Math.min(S.range.in, total - 1));
+    const b = S.range.out == null ? total - 1 : Math.max(a, Math.min(S.range.out, total - 1));
+    return { a, b };
+  }
+
+  function renderRangeLabel() {
+    const i = S.range.in, o = S.range.out;
+    if (i == null && o == null) $('rangeshow').textContent = '无选区';
+    else {
+      const r = rangeBounds();
+      $('rangeshow').textContent = r.a + ' – ' + r.b + '（' + Math.max(0, r.b - r.a + 1) + ' 帧）' + (S.range.loop ? ' 循环中' : '');
+    }
+    $('loop').classList.toggle('on', !!S.range.loop);
+  }
+
+  $('setin').onclick = () => {
+    S.range.in = S.frame;
+    if (S.range.out != null && S.range.out < S.frame) S.range.out = S.frame;
+    renderRangeLabel(); drawTimeline(); autosave(); say('入点 ' + S.frame);
+  };
+  $('setout').onclick = () => {
+    S.range.out = S.frame;
+    if (S.range.in != null && S.range.in > S.frame) S.range.in = S.frame;
+    renderRangeLabel(); drawTimeline(); autosave(); say('出点 ' + S.frame);
+  };
+  $('loop').onclick = () => { S.range.loop = !S.range.loop; renderRangeLabel(); autosave(); };
+  $('clearrange').onclick = () => { S.range = { in: null, out: null, loop: false }; renderRangeLabel(); drawTimeline(); autosave(); };
+
+  v.addEventListener('timeupdate', () => {
+    if (v.paused) return;
+    if (S.range.out == null) return;
+    const r = rangeBounds();
+    const cur = v.currentTime * S.fps;
+    if (cur >= r.b + 1) {
+      if (S.range.loop) {
+        v.currentTime = Math.min((r.a + 0.5) / S.fps, Math.max(0, (v.duration || 0) - 0.001));
+      } else {
+        v.pause();
+        v.currentTime = Math.min((r.b + 0.5) / S.fps, Math.max(0, (v.duration || 0) - 0.001));
+      }
+    }
+  });
+
+  // ---------------- 渲染 ----------------
+  function visibleItems(f) {
+    return S.items.filter(it => {
+      const t = trackOf(it.track);
+      return t && !t.hidden && f >= it.start && f <= it.end;
+    });
+  }
+
+  function paint(it, g, W, H, alpha) {
+    g = g || ctx; W = W || cv.width; H = H || cv.height;
+    g.save();
+    if (alpha != null) g.globalAlpha = alpha;
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    g.strokeStyle = it.color; g.fillStyle = it.color;
+    g.lineWidth = it.size;
+    g.font = '600 ' + Math.max(16, it.size * 6) + 'px "Microsoft YaHei UI", sans-serif';
+    g.textBaseline = 'top';
+    g.shadowColor = 'transparent'; g.shadowBlur = 0;
+
+    if (it.tool === 'pen') {
+      if (it.points.length === 1) {
+        const p = it.points[0];
+        g.beginPath(); g.arc(p.x * W, p.y * H, it.size / 2, 0, 7); g.fill();
+      } else {
+        g.beginPath();
+        it.points.forEach((p, i) => i ? g.lineTo(p.x * W, p.y * H) : g.moveTo(p.x * W, p.y * H));
+        g.stroke();
+      }
+    } else if (it.tool === 'line') {
+      const a = it.points[0], b = it.points[it.points.length - 1];
+      if (a && b) {
+        const x1 = a.x * W, y1 = a.y * H, x2 = b.x * W, y2 = b.y * H;
+        g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+        const ang = Math.atan2(y2 - y1, x2 - x1), h = Math.max(10, it.size * 3.5);
+        g.beginPath(); g.moveTo(x2, y2);
+        g.lineTo(x2 - h * Math.cos(ang - .4), y2 - h * Math.sin(ang - .4));
+        g.lineTo(x2 - h * Math.cos(ang + .4), y2 - h * Math.sin(ang + .4));
+        g.closePath(); g.fill();
+      }
+    } else if (it.tool === 'rect') {
+      const a = it.points[0], b = it.points[it.points.length - 1];
+      if (a && b) g.strokeRect(a.x * W, a.y * H, (b.x - a.x) * W, (b.y - a.y) * H);
+    } else if (it.tool === 'text') {
+      const p = it.points[0];
+      if (p) {
+        const lines = String(it.text || '').split('\n');
+        const lh = Math.max(16, it.size * 6) * 1.25;
+        lines.forEach((ln, i) => g.fillText(ln, p.x * W, p.y * H + i * lh));
+      }
+    }
+    g.restore();
+  }
+
+  let rafPending = 0;
+  function renderFrame() {
+    if (rafPending) return;                 // 已经在等下一帧了，别重复排
+    rafPending = requestAnimationFrame(() => { rafPending = 0; renderFrameNow(); });
+  }
+
+  function renderFrameNow() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+
+    // 洋葱皮：前几帧（偏红）和后几帧（偏青）的注释淡影
+    if (S.onion) {
+      const span = S.onionSpan || 2;
+      for (let d = span; d >= 1; d--) {
+        const a = 0.30 - (d - 1) * 0.08;
+        const prev = S.frame - d, next = S.frame + d;
+        if (prev >= 0) {
+          S.items.filter(it => { const tr = trackOf(it.track); return tr && !tr.hidden && prev >= it.start && prev <= it.end; })
+            .forEach(it => paint(it, null, null, null, a));
+        }
+        if (next < frameCount()) {
+          S.items.filter(it => { const tr = trackOf(it.track); return tr && !tr.hidden && next >= it.start && next <= it.end; })
+            .forEach(it => paint(it, null, null, null, a * 0.8));
+        }
+      }
+    }
+
+    visibleItems(S.frame).forEach(it => paint(it));
+    if (S.textDraft) paint(S.textDraft);
+    if (S.drawing) paint(S.drawing);
+
+    // 橡皮光标圈
+    if (S.tool === 'eraser' && S.cursor) {
+      const r = eraserPx();
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(S.cursor.x * cv.width, S.cursor.y * cv.height, r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,.9)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,.45)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(S.cursor.x * cv.width, S.cursor.y * cv.height, r + 1.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawTimeline() {
+    const c = $('tl');
+    const rect = $('timeline').getBoundingClientRect();
+    if (!rect.width) return;
+    c.width = Math.round(rect.width); c.height = rect.height;
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, c.width, c.height);
+    const total = frameCount();
+    const px = (f) => (f / Math.max(1, total - 1)) * (c.width - 1);
+
+    if (S.range.in != null || S.range.out != null) {
+      const r = rangeBounds();
+      g.fillStyle = 'rgba(78,161,255,.13)';
+      g.fillRect(px(r.a), 0, Math.max(1, px(r.b) - px(r.a)), c.height);
+      g.fillStyle = '#4ea1ff';
+      g.fillRect(px(r.a), 0, 1.5, c.height);
+      g.fillRect(Math.max(0, px(r.b) - 1.5), 0, 1.5, c.height);
+    }
+
+    const n = Math.max(1, S.tracks.length);
+    const rowH = c.height / n;
+    S.tracks.forEach((t, i) => {
+      if (t.hidden) return;
+      const y = i * rowH + rowH / 2 - 2.5;
+      g.fillStyle = t.color;
+      S.items.filter(it => it.track === t.id).forEach(it => {
+        g.globalAlpha = .85;
+        const x1 = px(it.start), x2 = Math.max(px(it.end), x1 + 1.5);
+        g.fillRect(x1, y, Math.max(1.5, x2 - x1), 5);
+      });
+      g.globalAlpha = 1;
+    });
+
+    g.fillStyle = '#fff';
+    g.fillRect(px(S.frame) - 1, 0, 2, c.height);
+  }
+
+  $('timeline').onclick = (e) => {
+    const r = $('timeline').getBoundingClientRect();
+    const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    seekFrame(Math.round(p * (frameCount() - 1)));
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  };
+
+  function itemLabel(it) {
+    if (it.name) return it.name;
+    if (it.tool === 'text') return '文字：' + String(it.text || '').replace(/\s+/g, ' ').slice(0, 14);
+    return KIND[it.tool] || it.tool;
+  }
+
+  function renderMarks() {
+    const box = $('marks');
+    box.innerHTML = '';
+    const list = [...S.items].sort((a, b) => a.start - b.start || a.seq - b.seq);
+    $('mkcount').textContent = list.length ? '(' + list.length + ')' : '';
+    const vc = $('vidcount');
+    if (vc) vc.textContent = S.videos.length ? '(' + S.videos.length + ')' : '';
+    list.forEach(it => {
+      const t = trackOf(it.track);
+      const d = document.createElement('div');
+      d.className = 'mk' + (S.sel === it ? ' sel' : '');
+      const dur = it.end - it.start + 1;
+      d.innerHTML = '<span class="chip" style="background:' + (t ? t.color : '#666') + '"></span>' +
+        '<span class="f">' + it.start + '</span>' +
+        '<span class="nm">' + escapeHtml(itemLabel(it)) + '</span>' +
+        '<span class="d">' + (dur > 1 ? dur + '帧' : '') + '</span>';
+      d.onclick = () => { S.sel = it; seekFrame(it.start); showDetail(); renderMarks(); };
+      box.appendChild(d);
+    });
+  }
+
+  function showDetail() {
+    const it = S.sel;
+    const d = $('detail');
+    if (!it || !S.items.includes(it)) { d.classList.remove('show'); return; }
+    d.classList.add('show');
+    $('dname').value = it.name || '';
+    $('dstart').value = it.start;
+    $('dend').value = it.end;
+    $('dlen').textContent = it.end - it.start + 1;
+    const isText = it.tool === 'text';
+    $('dtextrow').style.display = isText ? 'flex' : 'none';
+    if (isText) $('dtext').value = it.text || '';
+  }
+
+  $('dname').oninput = () => { if (!S.sel) return; S.sel.name = $('dname').value; renderMarks(); autosave(); };
+  $('dtext').oninput = () => {
+    if (!S.sel || S.sel.tool !== 'text') return;
+    S.sel.text = $('dtext').value;
+    renderFrame(); renderMarks(); autosave();
+  };
+  $('dtext').onkeydown = (e) => { e.stopPropagation(); };
+  $('dstart').oninput = () => {
+    if (!S.sel) return;
+    S.sel.start = Math.max(0, Math.min(+$('dstart').value | 0, S.sel.end));
+    $('dlen').textContent = S.sel.end - S.sel.start + 1;
+    renderFrame(); renderMarks(); drawTimeline(); autosave();
+  };
+  $('dend').oninput = () => {
+    if (!S.sel) return;
+    S.sel.end = Math.max(S.sel.start, +$('dend').value | 0);
+    $('dlen').textContent = S.sel.end - S.sel.start + 1;
+    renderFrame(); renderMarks(); drawTimeline(); autosave();
+  };
+  $('ddel').onclick = () => {
+    if (!S.sel) return;
+    S.items = S.items.filter(x => x !== S.sel);
+    S.sel = null;
+    showDetail(); renderFrame(); renderMarks(); drawTimeline(); autosave();
+  };
+
+  // ---------------- 画 ----------------
+  const posOf = (e) => {
+    const r = cv.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  };
+
+  // 一条注释占的范围（归一化坐标），用来判断点没点到
+  function boundsOf(it) {
+    const pts = it.points || [];
+    if (!pts.length) return null;
+    let x1 = 1, y1 = 1, x2 = 0, y2 = 0;
+    pts.forEach(p => { x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y); x2 = Math.max(x2, p.x); y2 = Math.max(y2, p.y); });
+    if (it.tool === 'text') {
+      const lines = String(it.text || '').split('\n');
+      const size = Math.max(16, it.size * 6) / (cv.height || 720);   // 字号换算成归一化高度
+      const longest = Math.max(1, ...lines.map(s => s.length)) * size * 0.62;
+      x2 = Math.max(x2, x1 + Math.min(0.9, longest));
+      y2 = Math.max(y2, y1 + size * 1.25 * lines.length);
+    }
+    const pad = 8 / (cv.width || 1280);
+    return { x1: x1 - pad, y1: y1 - pad, x2: x2 + pad, y2: y2 + pad };
+  }
+
+  function hitItem(it, p) {
+    if (!it || S.frame < it.start || S.frame > it.end) return false;
+    const b = boundsOf(it);
+    if (!b) return false;
+    return p.x >= b.x1 && p.x <= b.x2 && p.y >= b.y1 && p.y <= b.y2;
+  }
+
+  let moving = null;   // { item, from, orig }
+
+  cv.addEventListener('pointerdown', (e) => {
+    if (!v.src) return;
+    e.preventDefault();
+    if (S.textDraft) { commitText(); }   // 点画面别处 = 文字自动落盘
+
+    if (S.tool === 'eraser') {
+      cv.setPointerCapture(e.pointerId);
+      S.erasing = true;
+      lastErase = null;
+      eraseAlong(posOf(e));
+      return;
+    }
+    // 先把「已经选中的那条」拽走
+    const p0 = posOf(e);
+    if (S.sel && S.tool !== 'eraser' && hitItem(S.sel, p0)) {
+      cv.setPointerCapture(e.pointerId);
+      moving = { item: S.sel, from: p0, orig: S.sel.points.map(q => ({ x: q.x, y: q.y })) };
+      cv.style.cursor = 'move';
+      return;
+    }
+
+    if (S.tool === 'text') { startText(e); return; }
+
+    cv.setPointerCapture(e.pointerId);
+    S.drawing = {
+      seq: S.seq++, track: S.track, tool: S.tool,
+      color: $('color').value, size: +$('size').value,
+      points: [posOf(e)], start: S.frame, end: S.frame, text: '', name: ''
+    };
+    renderFrame();
+  });
+
+  // 局部橡皮：命中笔迹上的点就把那条按命中点切成几段
+  const eraserPx = () => Math.max(4, Math.min(200, (+$('erasize').value) || 18));
+
+  function eraseAt(p) {
+    const radius = eraserPx() / (cv.width || 1280);
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    let changed = false;
+    const keep = [];
+    S.items.forEach(it => {
+      const inFrame = S.frame >= it.start && S.frame <= it.end;
+      if (!inFrame || it.track !== S.track || it.tool !== 'pen' || !it.points) { keep.push(it); return; }
+      const hit = it.points.some(pt => dist(pt, p) < radius);
+      if (!hit) { keep.push(it); return; }
+      changed = true;
+      // 按命中点把点串拆开
+      let seg = [];
+      it.points.forEach(pt => {
+        if (dist(pt, p) < radius) {
+          if (seg.length) { keep.push(Object.assign({}, it, { seq: S.seq++, points: seg })); seg = []; }
+        } else seg.push(pt);
+      });
+      if (seg.length) keep.push(Object.assign({}, it, { seq: S.seq++, points: seg }));
+    });
+    if (changed) {
+      S.items = keep;
+      if (S.sel && !S.items.includes(S.sel)) { S.sel = null; showDetail(); }
+      renderFrame(); renderMarks(); drawTimeline(); autosave();
+    }
+  }
+
+  // 沿鼠标移动的线段插值擦，快速拖动也不会漏
+  let lastErase = null;
+  function eraseAlong(p) {
+    const step = Math.max(2, eraserPx() * 0.35) / (cv.width || 1280);
+    if (!lastErase) { lastErase = p; eraseAt(p); return; }
+    const a = lastErase, b = p;
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    if (d < step) { eraseAt(b); lastErase = b; return; }
+    const n = Math.ceil(d / step);
+    for (let i = 1; i <= n; i++) eraseAt({ x: a.x + (b.x - a.x) * i / n, y: a.y + (b.y - a.y) * i / n });
+    lastErase = b;
+  }
+  $('clearframe').onclick = () => {
+    const kill = S.items.filter(it => it.track === S.track && S.frame >= it.start && S.frame <= it.end);
+    if (!kill.length) { say('这一帧这条轨道没有注释'); return; }
+    S.items = S.items.filter(x => !kill.includes(x));
+    if (kill.includes(S.sel)) { S.sel = null; showDetail(); }
+    renderFrame(); renderMarks(); drawTimeline(); autosave();
+    say('清空了 ' + kill.length + ' 条');
+  };
+
+  cv.addEventListener('pointermove', (e) => {
+    if (moving) {
+      const p = posOf(e);
+      const dx = p.x - moving.from.x, dy = p.y - moving.from.y;
+      moving.item.points = moving.orig.map(q => ({ x: q.x + dx, y: q.y + dy }));
+      renderFrame();
+      return;
+    }
+    if (S.tool === 'eraser') { S.cursor = posOf(e); renderFrame(); }
+    if (S.erasing) { eraseAlong(posOf(e)); return; }
+    if (!S.drawing) return;
+    const p = posOf(e);
+    if (S.drawing.tool === 'pen') S.drawing.points.push(p);
+    else S.drawing.points[1] = p;
+    renderFrame();
+  });
+
+  // 橡皮状态下滚轮调大小
+  cv.addEventListener('wheel', (e) => {
+    if (S.tool !== 'eraser') return;
+    e.preventDefault();
+    const cur = eraserPx() + (e.deltaY < 0 ? 2 : -2);
+    $('erasize').value = Math.max(4, Math.min(200, cur));
+    renderFrame();
+  }, { passive: false });
+
+  // 改数字时立刻反映到圈上
+  $('erasize').oninput = () => { renderFrame(); };
+
+  cv.addEventListener('pointermove', (e) => {
+    if (moving || !S.sel) return;
+    if (hitItem(S.sel, posOf(e))) cv.style.cursor = 'move';
+    else cv.style.cursor = S.tool === 'text' ? 'text' : (S.tool === 'eraser' ? 'cell' : 'crosshair');
+  });
+
+  cv.addEventListener('pointerleave', () => {
+    if (S.tool === 'eraser' && S.cursor) { S.cursor = null; renderFrame(); }
+  });
+  // 把折线按固定像素间隔补点，橡皮才能按圈精细擦
+  function resample(points, stepPx) {
+    if (!points || points.length < 2) return points;
+    const step = Math.max(1.2, stepPx) / (cv.width || 1280);
+    const out = [points[0]];
+    for (let i = 1; i < points.length; i++) {
+      const a = out[out.length - 1], b = points[i];
+      const d = Math.hypot(b.x - a.x, b.y - a.y);
+      if (d < 1e-6) continue;
+      const n = Math.max(1, Math.ceil(d / step));
+      for (let k = 1; k <= n; k++) out.push({ x: a.x + (b.x - a.x) * k / n, y: a.y + (b.y - a.y) * k / n });
+    }
+    return out;
+  }
+
+  cv.addEventListener('pointerup', () => {
+    if (moving) {
+      moving = null;
+      cv.style.cursor = S.tool === 'text' ? 'text' : (S.tool === 'eraser' ? 'cell' : 'crosshair');
+      renderMarks(); drawTimeline(); autosave();
+      return;
+    }
+    if (S.erasing) { S.erasing = false; return; }
+    if (!S.drawing) return;
+    const it = S.drawing;
+    S.drawing = null;
+    if (it.tool === 'pen' && it.points.length > 1) it.points = resample(it.points, Math.max(2.5, it.size * 0.6));
+    if (it.points.length) { S.items.push(it); S.sel = it; }
+    renderFrame(); renderMarks(); showDetail(); drawTimeline(); autosave();
+  });
+
+  function startText(e) {
+    if (S.textDraft) commitText();
+    const p = posOf(e);
+    const sr = stage.getBoundingClientRect();
+    txtBox.style.display = 'block';
+    txtBox.style.left = Math.round(e.clientX - sr.left) + 'px';
+    txtBox.style.top = Math.round(e.clientY - sr.top) + 'px';
+    txtBox.textContent = '';
+    txtBox.style.color = $('color').value;
+
+    S.textDraft = {
+      seq: S.seq++, track: S.track, tool: 'text',
+      color: $('color').value, size: +$('size').value,
+      points: [p], start: S.frame, end: S.frame, text: '', name: ''
+    };
+
+    setTimeout(() => {
+      try {
+        txtBox.focus({ preventScroll: true });
+        const r = document.createRange();
+        r.selectNodeContents(txtBox); r.collapse(false);
+        const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      } catch (err) {}
+    }, 30);
+
+    // 边打边显示：每次输入都同步到画面
+    txtBox.oninput = () => {
+      if (!S.textDraft) return;
+      S.textDraft.text = txtBox.textContent.replace(/\u00a0/g, ' ');
+      renderFrame();
+    };
+    txtBox.onkeydown = (ev) => {
+      ev.stopPropagation();
+      if (ev.key === 'Escape') { S.textDraft = null; txtBox.textContent = ''; txtBox.style.display = 'none'; renderFrame(); }
+    };
+    txtBox.onblur = () => commitText();
+  }
+
+  // 把正在打的字落盘（不需要回车）
+  function commitText() {
+    const d = S.textDraft;
+    S.textDraft = null;
+    txtBox.style.display = 'none';
+    txtBox.onblur = null;
+    if (!d) return;
+    const raw = String(d.text || '').trim();
+    if (!raw) { renderFrame(); return; }
+    d.text = raw;
+    S.items.push(d); S.sel = d;
+    renderFrame(); renderMarks(); showDetail(); drawTimeline(); autosave();
+  }
+
+  // ---------------- 播放 ----------------
+  $('play').onclick = () => v.paused ? v.play() : v.pause();
+  v.addEventListener('durationchange', () => { syncSeekMax(); updateHUD(); });
+  v.addEventListener('loadedmetadata', () => { syncSeekMax(); });
+  v.addEventListener('play', () => $('play').textContent = '暂停');
+  v.addEventListener('pause', () => { $('play').textContent = '播放'; renderFrame(); });
+
+  const hasRVFC = typeof v.requestVideoFrameCallback === 'function';
+  function onVideoFrame(now, meta) {
+    if (v.src) {
+      const mt = (meta && typeof meta.mediaTime === 'number') ? meta.mediaTime : v.currentTime;
+      const n = Math.max(0, Math.round(mt * S.fps));
+      if (n !== S.frame) { S.frame = n; renderFrame(); updateHUD(); drawTimeline(); }
+    }
+    if (!v.paused) v.requestVideoFrameCallback(onVideoFrame);
+  }
+  v.addEventListener('play', () => { if (hasRVFC) v.requestVideoFrameCallback(onVideoFrame); });
+
+  (function tick() {
+    if (!hasRVFC && !v.paused && v.src) {
+      const n = frameNow();
+      if (n !== S.frame) { S.frame = n; renderFrame(); updateHUD(); drawTimeline(); }
+    }
+    requestAnimationFrame(tick);
+  })();
+
+  document.addEventListener('keydown', (e) => {
+    const t = e.target;
+    const isTextField = t.isContentEditable ||
+      (t.tagName === 'INPUT' && /^(number|text|search)$/i.test(t.type || 'text')) ||
+      t.tagName === 'TEXTAREA';
+    if (isTextField) return;
+    if (t.tagName === 'INPUT' && t.type === 'range' && (e.code === 'Space' || e.key.indexOf('Arrow') === 0)) e.preventDefault();
+
+    if (e.code === 'Space') { e.preventDefault(); v.paused ? v.play() : v.pause(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); seekFrame(S.frame - 1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); seekFrame(S.frame + 1); }
+    else if (e.key === '1') setTool('pen');
+    else if (e.key === '2') setTool('text');
+    else if (e.key === '3') setTool('line');
+    else if (e.key === '4') setTool('rect');
+    else if (e.key === '5') setTool('eraser');
+    else if (e.key === 'i' || e.key === 'I') $('setin').click();
+    else if (e.key === 'o' || e.key === 'O') $('setout').click();
+    else if (e.key === 'l' || e.key === 'L') $('loop').click();
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) redo(); else undo();
+    }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+  });
+
+  function setTool(t) {
+    if (S.textDraft) commitText();
+    S.tool = t;
+    // 画笔 → 画笔轨道，文字 → 文字轨道（有就切过去）
+    const want = t === 'pen' ? 'pen' : (t === 'text' ? 'text' : null);
+    if (want) {
+      const tr = S.tracks.find(x => x.role === want);
+      if (tr && S.track !== tr.id) { S.track = tr.id; $('color').value = tr.color; renderTracks(); }
+    }
+    document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+    cv.style.cursor = t === 'text' ? 'text' : (t === 'eraser' ? 'cell' : 'crosshair');
+  }
+  document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+
+  // ---- 历史（快照式，撤销/前进都能用）----
+  function pushHistory() {
+    try {
+      const snap = JSON.stringify(S.items);
+      if (S.hist[S.histPos] === snap) return;
+      S.hist = S.hist.slice(0, S.histPos + 1);
+      S.hist.push(snap);
+      S.histPos = S.hist.length - 1;
+      if (S.hist.length > 120) { S.hist.shift(); S.histPos--; }
+      updateHistButtons();
+    } catch (e) {}
+  }
+  function restoreHist(i) {
+    S.items = JSON.parse(S.hist[i]);
+    S.sel = null; showDetail();
+    renderFrame(); renderMarks(); drawTimeline();
+    updateHistButtons();
+    try { autosave(); } catch (e) {}
+  }
+  function updateHistButtons() {
+    const u = $('undo'), r = $('redo');
+    if (u) u.style.opacity = S.histPos > 0 ? 1 : .35;
+    if (r) r.style.opacity = S.histPos < S.hist.length - 1 ? 1 : .35;
+  }
+  function undo() {
+    if (S.histPos <= 0) { say('没有可撤销的了'); return; }
+    S.histPos--; restoreHist(S.histPos);
+  }
+  function redo() {
+    if (S.histPos >= S.hist.length - 1) { say('没有可前进的了'); return; }
+    S.histPos++; restoreHist(S.histPos);
+  }
+  $('undo').onclick = undo;
+  $('redo').onclick = redo;
+
+  $('open').onclick = async () => {
+    if (!DESK) { $('file').click(); return; }
+    const items = await window.lapian.pickFiles();
+    if (!items || !items.length) return;
+    addVideos(items);
+    const first = items[0];
+    S.videoIndex = S.videos.findIndex(x => x.path === first.path);
+    openFromList(S.videoIndex);
+  };
+  $('file').onchange = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    // 加到左侧列表（没有文件夹也能加）
+    const exist = S.videos.findIndex(x => x.name === f.name);
+    const item = { name: f.name, file: f, size: f.size, hasNote: false };
+    if (exist >= 0) { S.videos[exist] = item; S.videoIndex = exist; }
+    else { S.videos.push(item); S.videos.sort((a, b) => a.name.localeCompare(b.name, 'zh')); S.videoIndex = S.videos.findIndex(x => x.name === f.name); }
+    renderVideos();
+    loadVideo(f, false);
+    e.target.value = '';
+  };
+  ['dragenter', 'dragover'].forEach(t => stage.addEventListener(t, e => e.preventDefault()));
+  // 没有工程就自动建一个，避免拖进来的视频丢掉
+  async function ensureProject() {
+    if (!DESK || S.proj) return;
+    const d = new Date();
+    const name = '放映 ' + (d.getMonth() + 1) + '-' + d.getDate() + ' '
+      + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+    S.proj = { id: 'p' + Date.now(), name, videos: [], currentPath: '', count: 0, createdAt: Date.now() };
+    try { await window.lapian.projectSave(S.proj); } catch (e) {}
+    renderProjName();
+  }
+
+  // 把视频加进列表，同时记进工程
+  function addVideos(items) {
+    if (!items || !items.length) return [];
+    items.forEach(it => {
+      const i = S.videos.findIndex(x => x.path === it.path);
+      if (i >= 0) S.videos[i] = Object.assign({}, S.videos[i], it);
+      else S.videos.push(it);
+    });
+    S.videos.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+    renderVideos();
+    if (DESK) {
+      const el = $('startup');
+      if (el) el.classList.add('hide');     // 拖进来就把启动页收起来
+      ensureProject().then(() => { renderProjName(); saveProjectNow(); });
+    }
+    return items;
+  }
+
+  async function handleDrop(e) {
+    e.preventDefault();
+    const f0 = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f0) return;
+    if (DESK) await ensureProject();
+
+    // 桌面版：Electron 给的文件对象带 .path
+    const f0path = DESK ? (window.lapian.pathForFile ? window.lapian.pathForFile(f0) : (f0.path || '')) : '';
+    if (DESK && f0path) {
+      const p = f0path;
+      let isDir = false;
+      try { const st = await window.lapian.statPath(p); isDir = !!(st && st.isDir); } catch (err) {}
+      if (isDir) {
+        const files = await window.lapian.listVideos(p);
+        if (!files.length) { say('这个文件夹里没有视频'); return; }
+        const before = S.videos.length;
+        addVideos(files);
+        updateSaveHint();
+        say('加入 ' + files.length + ' 个视频');
+        const idx = S.videos.findIndex(x => x.path === files[0].path);
+        if (idx >= 0) openFromList(idx);
+        return;
+      }
+      // 拖的是视频文件（可能多个）
+      const all = Array.from(e.dataTransfer.files || []);
+      const picked = [];
+      all.forEach(function (f) {
+        const pf = window.lapian.pathForFile ? window.lapian.pathForFile(f) : (f.path || "");
+        if (pf) picked.push({ path: pf, name: f.name, size: f.size, hasNote: false });
+      });
+      if (!picked.length) { say("拿不到文件路径，改用「导入视频」按钮试试"); return; }
+      addVideos(picked);
+      const firstIdx = S.videos.findIndex(function (x) { return x.path === picked[0].path; });
+      S.videoIndex = firstIdx;
+      openFromList(firstIdx);
+      return;
+      }
+
+    // 浏览器版：老逻辑
+    const items2 = e.dataTransfer.items ? Array.from(e.dataTransfer.items) : [];
+    for (const it of items2) {
+      if (it.kind === 'file' && typeof it.getAsFileSystemHandle === 'function') {
+        try {
+          const h = await it.getAsFileSystemHandle();
+          if (h && h.kind === 'directory') { await useFolder(h); return; }
+        } catch (err) {}
+      }
+    }
+    const f = e.dataTransfer.files[0];
+    if (!f || !f.type.startsWith('video/')) { say('拖视频文件，或者拖一个文件夹进来'); return; }
+    const item = { name: f.name, file: f, size: f.size, hasNote: false };
+    const i2 = S.videos.findIndex(x => x.name === f.name);
+    if (i2 >= 0) { S.videos[i2] = item; S.videoIndex = i2; } else { S.videos.push(item); S.videoIndex = S.videos.length - 1; }
+    renderVideos();
+    loadVideo(f, false);
+  }
+
+  stage.addEventListener('drop', handleDrop);
+  // 整个窗口都能接拖放：左侧列表、右侧面板、画面都行
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    window.addEventListener(ev, function (e) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }, false);
+  });
+  window.addEventListener('drop', function (e) { e.preventDefault(); handleDrop(e); }, false);
+
+  $('fps').onchange = () => {
+    S.fps = Math.max(1, parseFloat($('fps').value) || 24);
+    syncSeekMax();
+    renderMarks(); drawTimeline(); updateHUD();
+    seekFrame(Math.min(S.frame, frameCount() - 1));
+  };
+  $('seek').oninput = (e) => seekFrame(+e.target.value);
+  $('seek').onpointerup = (e) => e.target.blur();
+  $('seek').onchange = (e) => e.target.blur();
+  $('gojump').onclick = (e) => { seekFrame(+$('jump').value); e.target.blur(); };
+  $('jump').onkeydown = (e) => { if (e.key === 'Enter') seekFrame(+$('jump').value); };
+
+  function applyNotes(d, silent) {
+    if (!d || !Array.isArray(d.items)) throw new Error('这不是本工具保存的注释文件');
+    S.items = d.items;
+    if (Array.isArray(d.tracks) && d.tracks.length) S.tracks = d.tracks;
+    if (d.range) S.range = Object.assign({ in: null, out: null, loop: false }, d.range);
+    if (d.fps) { S.fps = d.fps; $('fps').value = d.fps; }
+    S.tid = S.tracks.length + 1;
+    S.sel = null; showDetail();
+    renderTracks(); renderFrame(); renderMarks(); drawTimeline(); renderRangeLabel();
+    if (!silent) say('读入 ' + S.items.length + ' 条注释 / ' + S.tracks.length + ' 条轨道');
+  }
+  function payload() {
+    return {
+      app: 'lapian', version: 3, video: S.videoName, fps: S.fps,
+      tracks: S.tracks, items: S.items, range: S.range,
+      savedAt: new Date().toISOString()
+    };
+  }
+
+  // ---- 直接写进视频所在文件夹（Chrome 的文件系统接口）----
+  const FS_OK = typeof window.showDirectoryPicker === 'function';
+  let dirHandle = null;
+
+  async function idbSet(key, val) {
+    return new Promise((res) => {
+      const r = indexedDB.open('lapian', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => {
+        const db = r.result;
+        const tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(val, key);
+        tx.oncomplete = () => { db.close(); res(true); };
+      };
+      r.onerror = () => res(false);
+    });
+  }
+  async function idbGet(key) {
+    return new Promise((res) => {
+      const r = indexedDB.open('lapian', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => {
+        const db = r.result;
+        const tx = db.transaction('kv', 'readonly');
+        const req = tx.objectStore('kv').get(key);
+        req.onsuccess = () => { db.close(); res(req.result || null); };
+        req.onerror = () => { db.close(); res(null); };
+      };
+      r.onerror = () => res(null);
+    });
+  }
+
+  async function pickFolder() {
+    if (!FS_OK) { alert('这个浏览器不支持直接写文件夹，请用「另存为」下载注释文件。'); return null; }
+    try {
+      const h = await window.showDirectoryPicker({ mode: 'readwrite', id: 'lapian', startIn: 'videos' });
+      const perm = await h.requestPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') { say('没有拿到写入权限'); return null; }
+      dirHandle = h;
+      await idbSet('dir', h);
+      say('已绑定文件夹，以后自动存在视频旁边');
+      updateSaveHint();
+      return h;
+    } catch (e) { if (e && e.name !== 'AbortError') say('选择文件夹失败'); return null; }
+  }
+
+  function noteFileName() {
+    return (S.videoName || 'project').replace(/.[^.]+$/, '') + '.拉片注释.json';
+  }
+
+  async function saveBesideVideo(silent) {
+    if (!dirHandle) { if (!silent) await pickFolder(); if (!dirHandle) return false; }
+    try {
+      const fh = await dirHandle.getFileHandle(noteFileName(), { create: true });
+      const w = await fh.createWritable();
+      await w.write(JSON.stringify(payload(), null, 2));
+      await w.close();
+      $('savehint').textContent = '已存: ' + noteFileName() + '  ' + new Date().toLocaleTimeString();
+      if (!silent) say('已存到视频旁边');
+      return true;
+    } catch (e) {
+      $('savehint').textContent = '写入失败，可能文件夹权限过期，点「绑定文件夹」重新授权';
+      if (!silent) alert('写入失败：' + e.message + '\n重新点「绑定文件夹」授权一次。');
+      return false;
+    }
+  }
+
+  function updateSaveHint() {
+    const bindBtn = $('bind');
+    if (DESK) {
+      if (bindBtn) bindBtn.style.display = 'none';
+      const ex = $('export'); if (ex) ex.style.display = 'none';
+      $('savehint').textContent = S.curPath ? ('注释存在视频旁边：' + S.curPath.split('\\').pop() + ' → 同名 .json') : '导入视频后，注释自动存在视频旁边';
+      return;
+    }
+    if (dirHandle) {
+      $('savehint').textContent = '注释自动存在视频旁边：' + noteFileName();
+      if (bindBtn) bindBtn.style.display = 'none';     // 已经绑定了，按钮不用露脸
+    } else if (FS_OK) {
+      $('savehint').textContent = '单独导入视频时，点一次「绑定文件夹」选所在目录即可（拖文件夹进来会自动绑定）';
+      if (bindBtn) bindBtn.style.display = '';
+    } else {
+      $('savehint').textContent = '当前浏览器不支持直接写文件夹，请用「另存为」';
+    }
+  }
+
+  // 自动保存（有文件夹句柄时静默写盘）
+  let asTimer = 0;
+  function scheduleSave() {
+    if (DESK) { if (S.curPath) { clearTimeout(scheduleSave._t); scheduleSave._t = setTimeout(() => saveNotesDesktop(true), 1200); } return; }
+    if (!dirHandle) return;
+    clearTimeout(asTimer);
+    asTimer = setTimeout(() => saveBesideVideo(true), 1200);
+  }
+  // ---------- 视频文件夹 ----------
+  const VIDEO_EXT = /\.(mp4|m4v|mov|mkv|webm|avi)$/i;
+
+  function renderVideos() {
+    const box = $('videos');
+    if (!S.videos.length) {
+      box.innerHTML = '<div id="vempty">还没导入文件夹<br>点上面「导入文件夹」</div>';
+      return;
+    }
+    box.innerHTML = '';
+    S.videos.forEach((v, i) => {
+      const d = document.createElement('div');
+      d.className = 'vi' + (i === S.videoIndex ? ' on' : '');
+      d.title = v.name;
+      const kb = v.size ? ' · ' + Math.round(v.size / 1048576) + ' MB' : '';
+      const label = (v.rel && v.rel !== v.name) ? v.rel : v.name;
+      d.innerHTML = '<div style="flex:1;overflow:hidden"><span title="' + escapeHtml(v.path || label) + '">' + escapeHtml(label) + '</span>'
+        + '<span class="sub">' + (v.hasNote ? '有注释' : '无注释') + kb + '</span></div>'
+        + '<span class="vdel" title="从列表移除（不删文件）">×</span>';
+      d.querySelector('.vdel').onclick = (ev) => { ev.stopPropagation(); removeVideo(i); };
+      d.onclick = () => openFromList(i);
+      box.appendChild(d);
+    });
+  }
+
+  // 从列表移除一个视频
+  async function removeVideo(i) {
+    const v = S.videos[i];
+    if (!v) return;
+    if (!confirm('把「' + v.name + '」从列表移除？\n（视频文件和注释文件都不会删）')) return;
+    S.videos.splice(i, 1);
+    if (S.videos.length === 0) {
+      S.videoIndex = -1;
+      S.curPath = '';
+      S.items = []; S.sel = null; showDetail();
+      v.pause(); v.removeAttribute('src'); v.load();
+      drop.classList.remove('hide');
+      renderFrame(); renderMarks(); drawTimeline();
+    } else if (i === S.videoIndex || S.videoIndex >= S.videos.length) {
+      S.videoIndex = Math.max(0, Math.min(S.videoIndex, S.videos.length - 1));
+      openFromList(S.videoIndex);
+    } else if (i < S.videoIndex) {
+      S.videoIndex--;
+    }
+    renderVideos();
+    if (DESK && S.proj) saveProjectNow();
+    say('已从列表移除');
+  }
+
+  // 清空整个列表
+  async function clearVideos() {
+    if (!S.videos.length) { say('列表是空的'); return; }
+    if (!confirm('把列表里 ' + S.videos.length + ' 个视频都清掉？\n（视频文件和注释文件都不会删）')) return;
+    S.videos = []; S.videoIndex = -1; S.curPath = '';
+    S.items = []; S.sel = null; showDetail();
+    v.pause(); v.removeAttribute('src'); v.load();
+    drop.classList.remove('hide');
+    renderVideos(); renderFrame(); renderMarks(); drawTimeline();
+    if (DESK && S.proj) saveProjectNow();
+    say('列表已清空');
+  }
+
+  async function importFolder() {
+    if (!FS_OK) { alert('这个浏览器不支持读取文件夹，请用左上「导入视频」。'); return; }
+    try {
+      const h = await window.showDirectoryPicker({ id: 'lapian-videos', mode: 'readwrite' });
+      await useFolder(h);
+    } catch (e) {
+      if (e && e.name !== 'AbortError') alert('读取文件夹失败：' + e.message);
+    }
+  }
+
+  // 拿到一个文件夹句柄之后：绑定 + 列出视频
+  async function useFolder(h) {
+    try { const perm = await h.requestPermission({ mode: 'readwrite' }); if (perm !== 'granted') { say('没拿到读写权限，能看不能存'); } } catch (e) {}
+    dirHandle = h;
+    try { await idbSet('dir', h); } catch (e) {}
+    S.videos = [];
+    for await (const [name, fh] of h.entries()) {
+      if (fh.kind !== 'file' || !VIDEO_EXT.test(name)) continue;
+      let size = 0, hasNote = false;
+      try { const f = await fh.getFile(); size = f.size; } catch (e) {}
+      try { await h.getFileHandle(name.replace(/\.[^.]+$/, '') + '.拉片注释.json'); hasNote = true; } catch (e) {}
+      S.videos.push({ name, handle: fh, size, hasNote });
+    }
+    S.videos.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+    renderVideos();
+    updateSaveHint();
+    say('找到 ' + S.videos.length + ' 个视频，注释会自动存在这个文件夹');
+    if (S.videos.length && S.videoIndex < 0) openFromList(0);
+  }
+
+  async function openFromList(i) {
+    const item = S.videos[i];
+    if (!item) return;
+    if (S.textDraft) commitText();
+    if (DESK) { await saveNotesDesktop(true); }
+    else { await saveBesideVideo(true).catch(() => {}); }
+    S.videoIndex = i;
+    renderVideos();
+    try {
+      if (DESK && item.path) { loadVideoPath(item); return; }
+      const file = item.handle ? await item.handle.getFile() : item.file;
+      loadVideo(file, !!item.handle);
+    } catch (e) { alert('打不开这个视频：' + e.message); }
+  }
+
+  // 桌面版：直接用真实路径播（自定义协议，支持拖动进度条）
+  function loadVideoPath(item) {
+    if (S.textDraft) commitText();
+    S.videoName = item.name;
+    S.curPath = item.path;
+    S.items = []; S.sel = null; S.frame = 0;
+    v.src = window.lapian.mediaUrl(item.path);
+    v.load();
+    drop.classList.add('hide');
+    v.addEventListener('loadedmetadata', async () => {
+      // 用 ffmpeg 探一下真实帧率，别让你手填
+      try {
+        const info = await window.lapian.probe(item.path);
+        if (info && info.fps) { S.fps = Math.round(info.fps * 1000) / 1000; }
+      } catch (e) {}
+      $('fps').value = S.fps;
+      syncSeekMax();
+      updateHUD();
+      syncCanvasSize();
+      // 读旁边同名的注释
+      try {
+        const d = await window.lapian.notesLoad(item.path);
+        if (d && Array.isArray(d.items)) {
+          applyNotes(d, true);
+          markNoteState(item.path, d.items.length > 0);
+        }
+      } catch (e) {}
+      seekFrame(0);
+      renderTracks(); renderMarks(); drawTimeline(); renderRangeLabel();
+      updateSaveHint();
+      if (DESK && S.proj) {
+        S.proj.currentPath = item.path;
+        autoSaveProject();
+      }
+    }, { once: true });
+  }
+
+  // 桌面版保存（直接写旁边，不用授权）
+  // 更新左边列表里"有注释/无注释"的标记
+  function markNoteState(pathVal, has) {
+    if (!pathVal) return;
+    let changed = false;
+    S.videos.forEach(v => {
+      if (v.path === pathVal && !!v.hasNote !== !!has) { v.hasNote = !!has; changed = true; }
+    });
+    if (changed) renderVideos();
+  }
+
+  async function saveNotesDesktop(silent) {
+    if (!DESK || !S.curPath) return false;
+    try {
+      const r = await window.lapian.notesSave(S.curPath, payload());
+      if (r && r.ok) {
+        markNoteState(S.curPath, S.items.length > 0);
+        $('savehint').textContent = '已存: ' + r.path.split('\\').pop();
+        if (!silent) say('已存到视频旁边');
+        return true;
+      }
+      if (!silent) alert('保存失败：' + (r && r.error));
+      return false;
+    } catch (e) { return false; }
+  }
+
+  async function loadSidecar() {
+    if (!dirHandle) return;
+    try {
+      const fh = await dirHandle.getFileHandle(noteFileName());
+      const f = await fh.getFile();
+      const d = JSON.parse(await f.text());
+      applyNotes(d, true);
+      say('已载入 ' + S.items.length + ' 条注释');
+    } catch (e) {}
+  }
+
+
+  $('clearvideos').onclick = () => clearVideos();
+  $('onion').onclick = () => {
+    S.onion = !S.onion;
+    $('onion').classList.toggle('on', S.onion);
+    renderFrame();
+    say('洋葱皮：' + (S.onion ? '开（前后各 ' + S.onionSpan + ' 帧）' : '关'));
+  };
+  $('importdir').onclick = async () => {
+    if (!DESK) { importFolder(); return; }
+    const r = await window.lapian.pickFolder();
+    if (!r || !r.files || !r.files.length) { say('这个文件夹里没有视频'); return; }
+    addVideos(r.files);
+    updateSaveHint();
+    say('加入 ' + r.files.length + ' 个视频');
+    openFromList(0);
+  };
+
+  // 拖动分隔条改左栏宽度
+  (function () {
+    let dragging = false;
+    const split = $('split'), vl = $('vlist');
+    split.addEventListener('pointerdown', (e) => {
+      dragging = true; split.setPointerCapture(e.pointerId); document.body.style.userSelect = 'none';
+    });
+    split.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const w = Math.max(120, Math.min(520, e.clientX - vl.getBoundingClientRect().left));
+      vl.style.width = w + 'px';
+      drawTimeline();
+    });
+    const stop = () => { if (!dragging) return; dragging = false; document.body.style.userSelect = ''; drawTimeline(); };
+    split.addEventListener('pointerup', stop);
+    split.addEventListener('pointercancel', stop);
+  })();
+
+  $('bind').onclick = () => pickFolder();
+  $('save').onclick = () => { DESK ? saveNotesDesktop(false) : saveBesideVideo(false); };
+  $('clearall').onclick = () => {
+    if (!S.items.length) { say('没有注释'); return; }
+    if (!confirm('清空这个视频的全部注释（' + S.items.length + ' 条）？')) return;
+    S.items = []; S.sel = null; showDetail();
+    renderFrame(); renderMarks(); drawTimeline(); autosave();
+    if (DESK) { saveNotesDesktop(true); markNoteState(S.curPath, false); }
+    say('已清空');
+  };
+  $('export').onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(payload(), null, 2)], { type: 'application/json' }));
+    a.download = noteFileName();
+    a.click();
+    say('已下载注释文件');
+  };
+  $('load').onclick = () => $('json').click();
+  $('json').onchange = (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const d = JSON.parse(r.result);
+        if (!Array.isArray(d.items)) throw new Error('这不是本工具保存的注释文件');
+        S.items = d.items;
+        if (Array.isArray(d.tracks) && d.tracks.length) S.tracks = d.tracks;
+        if (d.range) S.range = Object.assign({ in: null, out: null, loop: false }, d.range);
+        if (d.fps) { S.fps = d.fps; $('fps').value = d.fps; }
+        S.tid = S.tracks.length + 1;
+        S.sel = null; showDetail();
+        renderTracks(); renderFrame(); renderMarks(); drawTimeline(); renderRangeLabel();
+        say('读入 ' + S.items.length + ' 条注释 / ' + S.tracks.length + ' 条轨道');
+      } catch (err) { alert(err.message); }
+    };
+    r.readAsText(f);
+  };
+
+  const akey = () => 'lapian3:' + (S.videoName || 'none');
+  let histTimer = 0;
+  function touchChange() {                 // 有真实改动时才记历史
+    clearTimeout(histTimer);
+    histTimer = setTimeout(() => { try { pushHistory(); } catch (e) {} }, 350);
+  }
+
+  let lsTimer = 0;
+  function autosave() {
+    touchChange();
+    clearTimeout(lsTimer);
+    lsTimer = setTimeout(() => {
+      try {
+        const s = JSON.stringify(payload());
+        if (s.length < 4 * 1024 * 1024) localStorage.setItem(akey(), s);
+      } catch (e) {}
+    }, 900);
+    scheduleSave();
+  }
+  function loadAutosave() {
+    try {
+      const raw = localStorage.getItem(akey());
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.items)) S.items = d.items;
+      if (Array.isArray(d.tracks) && d.tracks.length) S.tracks = d.tracks;
+      if (d.range) S.range = Object.assign({ in: null, out: null, loop: false }, d.range);
+      if (d.fps) { S.fps = d.fps; $('fps').value = d.fps; }
+      S.tid = S.tracks.length + 1;
+    } catch (e) {}
+  }
+
+  // ---- 轻量剪辑：把入点-出点录成一段 webm ----
+  let clipping = false;
+  $('clip').onclick = async () => {
+    if (!v.src) return;
+    if (DESK) { return exportClipDesktop(); }
+    if (clipping) { say('正在导出，等一下'); return; }
+    if (S.range.in == null || S.range.out == null) { say('先标入点和出点'); return; }
+    const r = rangeBounds();
+    if (r.b <= r.a) { say('选区太短'); return; }
+    clipping = true;
+    $('clip').textContent = '导出中…';
+    const withNotes = $('clipnotes').checked;
+    const c = document.createElement('canvas');
+    c.width = v.videoWidth || 1280; c.height = v.videoHeight || 720;
+    const g = c.getContext('2d');
+    const stream = c.captureStream(30);
+    let audio = [];
+    try { const vs = v.captureStream ? v.captureStream() : null; if (vs) audio = vs.getAudioTracks(); } catch (e) {}
+    const mixed = new MediaStream([...stream.getVideoTracks(), ...audio]);
+    let rec = null;
+    try {
+      rec = new MediaRecorder(mixed, { mimeType: 'video/webm;codecs=vp9,opus', videoBitsPerSecond: 12000000 });
+    } catch (e) {
+      try { rec = new MediaRecorder(mixed, { mimeType: 'video/webm' }); } catch (e2) { alert('这个浏览器不支持录制'); clipping = false; $('clip').textContent = '导出选区'; return; }
+    }
+    const chunks = [];
+    rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunks.push(ev.data); };
+    const stopped = new Promise((res) => { rec.onstop = res; });
+
+    // 定位到入点
+    v.pause();
+    v.currentTime = Math.min((r.a + 0.5) / S.fps, Math.max(0, (v.duration || 0) - 0.001));
+    await new Promise((res) => { const h = () => { v.removeEventListener('seeked', h); res(); }; v.addEventListener('seeked', h); setTimeout(res, 400); });
+
+    rec.start(120);
+    await v.play();
+    let alive = true;
+    (function drawLoop() {
+      if (!alive) return;
+      g.drawImage(v, 0, 0, c.width, c.height);
+      if (withNotes) {
+        const f = Math.round(v.currentTime * S.fps);
+        S.items.filter(it => { const tr = trackOf(it.track); return tr && !tr.hidden && f >= it.start && f <= it.end; })
+          .forEach(it => paint(it, g, c.width, c.height));
+      }
+      requestAnimationFrame(drawLoop);
+    })();
+
+    await new Promise((res) => {
+      const check = () => {
+        const cur = v.currentTime * S.fps;
+        if (cur >= r.b + 1 || v.ended) return res();
+        setTimeout(check, 50);
+      };
+      check();
+    });
+
+    alive = false;
+    v.pause();
+    rec.stop();
+    await stopped;
+    clipping = false;
+    $('clip').textContent = '导出选区';
+
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const name = (S.videoName || 'clip').replace(/\.[^.]+$/, '') + '_' + r.a + '-' + r.b + '.webm';
+    if (dirHandle) {
+      try {
+        const fh = await dirHandle.getFileHandle(name, { create: true });
+        const w = await fh.createWritable();
+        await w.write(blob);
+        await w.close();
+        say('已导出到视频旁边：' + name);
+        return;
+      } catch (e) {}
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    say('已下载：' + name);
+  };
+
+  // 桌面版导出：ffmpeg 直接切片（秒级），可选带注释（重编码烧录）
+  async function exportClipDesktop() {
+    if (!S.curPath) { alert('这个视频没有真实路径，请用「导入文件夹」或「导入视频」。'); return; }
+    if (S.range.in == null || S.range.out == null) { say('先标入点和出点'); return; }
+    const r = rangeBounds();
+    if (r.b <= r.a) { say('选区太短'); return; }
+    if (clipping) { say('正在导出，稍等'); return; }
+    const withNotes = $('clipnotes').checked;
+    clipping = true;
+    $('clip').textContent = '导出中…';
+    try {
+      const base = S.curPath.replace(/\.[^.]+$/, '');
+      const out = base + '_' + r.a + '-' + r.b + (withNotes ? '_带注释' : '') + '.mp4';
+
+      if (!withNotes) {
+        // 不烧注释：ffmpeg 直接切（秒级）
+        const res = await window.lapian.exportClip({
+          videoPath: S.curPath,
+          startSec: (r.a / S.fps).toFixed(3),
+          endSec: ((r.b + 1) / S.fps).toFixed(3),
+          outPath: out
+        });
+        if (res.ok) { say('已导出：' + out.split('\\').pop() + (res.reencoded ? '（已重编码）' : '')); window.lapian.reveal(out); }
+        else alert('导出失败：' + res.error);
+        return;
+      }
+
+      // 烧注释：逐帧渲染 PNG → ffmpeg 合成
+      const dir = await window.lapian.tempDir();
+      const total = r.b - r.a + 1;
+      const c = document.createElement('canvas');
+      c.width = v.videoWidth || 1280; c.height = v.videoHeight || 720;
+      const g2 = c.getContext('2d');
+      const seekTo = (f) => new Promise((res) => {
+        const h = () => { v.removeEventListener('seeked', h); res(); };
+        v.addEventListener('seeked', h);
+        v.currentTime = Math.min((f + 0.5) / S.fps, Math.max(0, (v.duration || 0) - 0.001));
+      });
+      for (let i = 0; i < total; i++) {
+        const f = r.a + i;
+        await seekTo(f);
+        g2.drawImage(v, 0, 0, c.width, c.height);
+        S.items.filter(it => { const tr = trackOf(it.track); return tr && !tr.hidden && f >= it.start && f <= it.end; })
+          .forEach(it => paint(it, g2, c.width, c.height));
+        const b64 = c.toDataURL('image/png').split(',')[1];
+        await window.lapian.writeFile(dir + '\\f_' + String(i + 1).padStart(6, '0') + '.png', b64);
+        if (i % 5 === 0) $('clip').textContent = '渲染 ' + (i + 1) + '/' + total;
+      }
+      $('clip').textContent = '合成中…';
+      const res2 = await window.lapian.burnFrames({
+        framesDir: dir, fps: S.fps, audioFrom: S.curPath,
+        startSec: (r.a / S.fps).toFixed(3),
+        duration: (total / S.fps).toFixed(3),
+        outPath: out
+      });
+      if (res2.ok) { say('已导出（带注释）：' + out.split('\\').pop()); window.lapian.reveal(out); }
+      else alert('合成失败：' + res2.error);
+    } catch (e) {
+      alert('导出出错：' + e.message);
+    } finally {
+      clipping = false;
+      $('clip').textContent = '导出选区';
+    }
+  }
+
+  function say(msg) {
+    banner.textContent = msg;
+    banner.style.display = 'block';
+    clearTimeout(say._t);
+    say._t = setTimeout(() => banner.style.display = 'none', 1800);
+  }
+
+  (async () => {
+    try {
+      const h = await idbGet('dir');
+      if (h) {
+        const q = await h.queryPermission({ mode: 'readwrite' });
+        dirHandle = h;
+        $('savehint').textContent = q === 'granted'
+          ? '注释会存到视频旁边：' + noteFileName() + '（已恢复）'
+          : '文件夹权限过期，点「绑定文件夹」重新授权一次';
+        return;
+      }
+    } catch (e) {}
+    updateSaveHint();
+  })();
+
+
+      // ---------------- 工程 ----------------
+  // 输入框弹窗（Electron 里没有 window.prompt）
+  function askText(title, defVal) {
+    return new Promise((resolve) => {
+      const box = document.createElement('div');
+      box.style.cssText = 'position:fixed;inset:0;background:#000a;z-index:300;display:flex;align-items:center;justify-content:center';
+      const card = document.createElement('div');
+      card.style.cssText = 'background:#252a33;border:1px solid #343b47;border-radius:12px;padding:18px 20px;width:420px;color:#e6e9ef';
+      card.innerHTML = '<div style="font-size:15px;font-weight:600;margin-bottom:10px">' + escapeHtml(title) + '</div>'
+        + '<input id="ask-inp" type="text" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #343b47;background:#2f3642;color:#e6e9ef;font-size:14px">'
+        + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">'
+        + '<button id="ask-cancel" style="padding:6px 14px">取消</button>'
+        + '<button id="ask-ok" style="padding:6px 14px;background:#4ea1ff;border-color:#4ea1ff;color:#06121f;font-weight:600">确定</button></div>';
+      box.appendChild(card);
+      document.body.appendChild(box);
+      const inp = card.querySelector('#ask-inp');
+      inp.value = defVal || '';
+      setTimeout(() => { inp.focus(); inp.select(); }, 20);
+      const done = (v) => { document.body.removeChild(box); resolve(v); };
+      card.querySelector('#ask-ok').onclick = () => done(inp.value.trim());
+      card.querySelector('#ask-cancel').onclick = () => done(null);
+      inp.onkeydown = (e) => {
+        if (e.key === 'Enter') done(inp.value.trim());
+        if (e.key === 'Escape') done(null);
+      };
+      box.onclick = (e) => { if (e.target === box) done(null); };
+    });
+  }
+
+  async function newProject() {
+    const d = new Date();
+    const def = '新工程 ' + (d.getMonth() + 1) + '-' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+    const name = await askText('新建工程', def);
+    if (name === null) return;
+    const proj = {
+      id: 'p' + Date.now(),
+      name: name || def,
+      videos: [],
+      currentPath: '',
+      count: 0,
+      createdAt: Date.now()
+    };
+    await window.lapian.projectSave(proj);
+    S.proj = proj;
+    S.videos = []; S.videoIndex = -1;
+    await saveProjectNow();
+    renderVideos(); updateSaveHint(); renderProjName();
+    say('已新建工程：' + proj.name + '，拖视频或文件夹进来');
+  }
+
+  async function openProject(proj) {
+    S.proj = proj;
+    const paths = Array.isArray(proj.videos) ? proj.videos : [];
+    const files = [];
+    for (const p of paths) {
+      try {
+        const st = await window.lapian.statPath(p);
+        if (!st || !st.exists || st.isDir) continue;
+        files.push({ path: p, name: p.split('\\').pop(), size: st.size, hasNote: false });
+      } catch (e) {}
+    }
+    S.videos = files;
+    S.videoIndex = -1;
+    renderVideos(); updateSaveHint(); renderProjName();
+    const idx = Math.max(0, files.findIndex(x => x.path === proj.currentPath));
+    if (files.length) openFromList(idx);
+    else say('这个工程里还没有视频，拖进来就行');
+    await saveProjectNow();
+  }
+
+  async function showProjects() {
+    const list = await window.lapian.projectsList();
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;inset:0;background:#000a;z-index:99;display:flex;align-items:center;justify-content:center';
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#252a33;border:1px solid #343b47;border-radius:12px;width:520px;max-height:70vh;overflow:auto;padding:16px 18px;color:#e6e9ef';
+    let html = '<div style="font-size:16px;font-weight:600;margin-bottom:10px">工程</div>';
+    html += '<div style="margin-bottom:12px"><button id="pj-new" style="padding:6px 12px">＋ 新建工程（选文件夹）</button></div>';
+    html += '<div style="font-size:12px;color:#8b93a1;margin-bottom:6px">最近打开</div>';
+    if (!list.length) html += '<div style="color:#8b93a1;font-size:13px">还没有工程</div>';
+    list.forEach((p, i) => {
+      html += '<div data-pj="' + i + '" style="display:flex;gap:8px;align-items:center;padding:8px;border-radius:8px;cursor:pointer">'
+        + '<div style="flex:1;overflow:hidden"><div style="font-size:13.5px">' + escapeHtml(p.name) + ' <span style="color:#8b93a1">· ' + (p.count || 0) + ' 个</span></div>'
+        + '<div style="font-size:11.5px;color:#8b93a1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(p.dir) + '</div></div>'
+        + '<span data-del="' + i + '" style="color:#7a6168;padding:0 6px">删除</span></div>';
+    });
+    card.innerHTML = html;
+    box.appendChild(card);
+    document.body.appendChild(box);
+    card.querySelector('#pj-new').onclick = async () => { document.body.removeChild(box); newProject(); };
+    card.querySelectorAll('[data-pj]').forEach(el => {
+      el.onclick = async (ev) => {
+        if (ev.target.dataset.del !== undefined) {
+          await window.lapian.projectRemove(list[+ev.target.dataset.del].id);
+          document.body.removeChild(box); showProjects(); return;
+        }
+        document.body.removeChild(box);
+        openProject(list[+el.dataset.pj]);
+      };
+      el.onmouseenter = () => el.style.background = '#2f3a4a';
+      el.onmouseleave = () => el.style.background = 'transparent';
+    });
+    box.onclick = (ev) => { if (ev.target === box) document.body.removeChild(box); };
+  }
+
+  function renderProjName() {
+    const b = $('projbtn');
+    if (b) b.textContent = S.proj ? ('工程：' + S.proj.name) : '工程';
+    const dp = $('delproj');
+    if (dp) dp.style.display = S.proj ? '' : 'none';
+  }
+  // ---------------- 启动页 ----------------
+  async function showStartup() {
+    const el = $('startup');
+    el.classList.remove('hide');
+    const box = $('su-list');
+    box.innerHTML = '<div class="su-empty">读取工程列表…</div>';
+    let list = [];
+    try { list = await window.lapian.projectsList() || []; } catch (e) { list = []; }
+    if (!list.length) {
+      box.innerHTML = '<div class="su-empty">还没有工程。<br>直接拖一个视频文件夹到这个窗口，会自动建工程。<br>或者点「＋ 新建工程」。</div>';
+    } else {
+      box.innerHTML = '';
+      list.forEach((p, i) => {
+        const d = document.createElement('div');
+        d.className = 'su-item';
+        d.innerHTML = '<div style="flex:1;overflow:hidden">'
+          + '<div class="nm">' + escapeHtml(p.name || '未命名') + '</div>'
+          + '<div class="path">' + escapeHtml(p.dir || '') + '</div></div>'
+          + '<div class="meta">' + (p.count || 0) + ' 个视频</div>'
+          + '<div class="del" title="删除这个工程">✕</div>';
+        d.querySelector('.del').onclick = async (ev) => {
+          ev.stopPropagation();
+          await window.lapian.projectRemove(list[i].id);
+          showStartup();
+        };
+        d.onclick = async () => {
+          el.classList.add('hide');
+          await openProject(list[i]);
+        };
+        box.appendChild(d);
+      });
+    }
+  }
+
+  $('su-new').onclick = async () => {
+    await newProject();
+    if (S.proj) $('startup').classList.add('hide');
+  };
+  $('su-file').onclick = async () => {
+    $('startup').classList.add('hide');
+    const items = await window.lapian.pickFiles();
+    if (!items || !items.length) { showStartup(); return; }
+    items.forEach(it => {
+      const i = S.videos.findIndex(x => x.name === it.name);
+      if (i >= 0) S.videos[i] = it; else S.videos.push(it);
+    });
+    S.videos.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+    renderVideos();
+    S.videoIndex = S.videos.findIndex(x => x.path === items[0].path);
+    openFromList(S.videoIndex);
+  };
+  $('su-quit').onclick = () => window.close();
+
+  $('projbtn').onclick = () => showStartup();
+
+  // 工程保存：列表/当前视频一变就立刻落盘（不等定时器，避免关掉就丢）
+  async function saveProjectNow() {
+    if (!DESK || !S.proj) return;
+    S.proj.videos = S.videos.map(x => x.path);
+    S.proj.count = S.videos.length;
+    S.proj.currentPath = S.curPath || S.proj.currentPath || '';
+    try {
+      await window.lapian.projectSave(S.proj);
+      $('savehint').textContent = '工程已保存 · ' + new Date().toLocaleTimeString();
+    } catch (e) {
+      say('工程保存失败：' + e.message);
+    }
+  }
+
+  // 兼容老调用名：现在等同于立即保存
+  function autoSaveProject() { saveProjectNow(); }
+
+  // 有「保存工程」按钮时也支持手动，现在删掉了，保留兜底
+  const _sp = $('saveproj');
+  if (_sp) _sp.onclick = () => { autoSaveProject(); say('已保存'); };
+
+  $('delproj').onclick = async () => {
+    if (!S.proj) { say('当前没有打开工程'); return; }
+    if (!confirm('把「' + S.proj.name + '」从工程列表里删掉？\n（视频和注释文件都不会删）')) return;
+    try { await window.lapian.projectRemove(S.proj.id); } catch (e) {}
+    S.proj = null;
+    S.videos = []; S.videoIndex = -1;
+    renderVideos(); renderProjName(); renderMarks(); renderFrame(); drawTimeline();
+    say('工程已从列表删除');
+    showStartup();
+  };
+
+  if (DESK) {
+    window.lapian.onMenu((cmd) => {
+      if (cmd === 'import-files') $('open').click();
+      else if (cmd === 'import-folder') $('importdir').click();
+      else if (cmd === 'undo') undo();
+      else if (cmd === 'redo') redo();
+      else if (cmd === 'save') $('save').click();
+      else if (cmd === 'export-clip') $('clip').click();
+      else if (cmd === 'reveal') { if (S.curPath) window.lapian.reveal(S.curPath); }
+    });
+  }
+
+  renderTracks(); renderMarks(); drawTimeline(); renderRangeLabel();
+  renderProjName();
+  if (DESK) setTimeout(showStartup, 60);
+  window.addEventListener('resize', () => drawTimeline());
+})();
+</script>
+</body>
+</html>
